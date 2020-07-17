@@ -19,7 +19,9 @@
 						<toolChain id="org.eclipse.cdt.build.core.prefbase.toolchain.1249089227" name="No ToolChain" superClass="org.eclipse.cdt.build.core.prefbase.toolchain">
 							<targetPlatform id="org.eclipse.cdt.build.core.prefbase.toolchain.1249089227.1697316366" name=""/>
 							<builder id="org.eclipse.cdt.build.core.settings.default.builder.1280561367" keepEnvironmentInBuildfile="false" name="Gnu Make Builder" superClass="org.eclipse.cdt.build.core.settings.default.builder"/>
-							<tool id="org.eclipse.cdt.build.core.settings.holder.libs.1977728464" name="holder for library settings" superClass="org.eclipse.cdt.build.core.settings.holder.libs"/>
+							<tool id="org.eclipse.cdt.build.core.settings.holder.libs.1977728464" name="holder for library settings" superClass="org.eclipse.cdt.build.core.settings.holder.libs">
+								<option IS_BUILTIN_EMPTY="false" IS_VALUE_EMPTY="true" id="org.eclipse.cdt.build.core.settings.holder.libpaths.796384943" name="Library Paths" superClass="org.eclipse.cdt.build.core.settings.holder.libpaths" valueType="libPaths"/>
+							</tool>
 						</toolChain>
 					</folderInfo>
 				</configuration>
@@ -41,20 +43,22 @@
 			<path value=""/>
 		</doc-comment-owner>
 	</storageModule>
-	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets">
-		<buildTargets>
-			<target name="build" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
-				<buildCommand>compile.bat</buildCommand>
-				<stopOnError>true</stopOnError>
-				<useDefaultCommand>false</useDefaultCommand>
-				<runAllBuilders>true</runAllBuilders>
-			</target>
-		</buildTargets>
-	</storageModule>
 	<storageModule moduleId="scannerConfiguration">
 		<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
 		<scannerConfigBuildInfo instanceId="0.1038320236">
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
 		</scannerConfigBuildInfo>
+	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.make.core.buildtargets">
+		<buildTargets>
+			<target name="build" path="" targetID="org.eclipse.cdt.build.MakeTargetBuilder">
+				<buildCommand>compile.bat</buildCommand>
+				<buildArguments/>
+				<buildTarget>build</buildTarget>
+				<stopOnError>true</stopOnError>
+				<useDefaultCommand>false</useDefaultCommand>
+				<runAllBuilders>false</runAllBuilders>
+			</target>
+		</buildTargets>
 	</storageModule>
 </cproject>
