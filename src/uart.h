@@ -11,7 +11,7 @@
 
 #include "main.h"
 
-void uart2_init (void);
+void uart2_init(void);
 
 #endif /* _UART_H */
 

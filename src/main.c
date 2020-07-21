@@ -28,7 +28,7 @@
 //// Functions prototypes
 
 // main -- start of firmware and main loop
-int main (void);
+int main(void);
 
 // With SDCC, interrupt service routine function prototypes must be placed in the file that contains main ()
 // in order for an vector for the interrupt to be placed in the the interrupt vector space.  It's acceptable
@@ -57,49 +57,48 @@ void UART2_TX_IRQHandler(void) __interrupt(UART2_TX_IRQHANDLER);
 /////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////////////////////////////////
 
+int main(void) {
+    uint16_t ui16_TIM3_counter = 0;
+    uint16_t ui16_ebike_app_controller_counter = 0;
+    uint16_t ui16_motor_controller_counter = 0;
+    uint16_t ui16_debug_uart_counter = 0;
 
+    uint16_t ui16_temp = 0, ui16_throttle_value_filtered = 0;
 
-int main (void) {
-	uint16_t ui16_TIM3_counter = 0;
-	uint16_t ui16_ebike_app_controller_counter = 0;
-	uint16_t ui16_motor_controller_counter = 0;
-	uint16_t ui16_debug_uart_counter = 0;
+    // set clock at the max 16 MHz
+    CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
 
-	uint16_t ui16_temp = 0, ui16_throttle_value_filtered = 0;
+    brake_init();
+    while (GPIO_ReadInputPin(BRAKE__PORT, BRAKE__PIN) == 0)
+        ; // hold here while brake is pressed -- this is a protection for development
+    lights_init();
+    uart2_init();
+    timer2_init();  // 50 KHz and 2us pulse. (Not used ??)
+    timer3_init();  // 1KHz or 1ms period used for main loop timing
+    adc_init();
+    torque_sensor_init();
+    pas_init();
+    wheel_speed_sensor_init();
+    hall_sensor_init();
+    EEPROM_init(); // needed for pwm_init_bipolar_4q
+    pwm_init_bipolar_4q();  // init TIM1 at 15625Hz (64us)
+    enableInterrupts();
 
-	// set clock at the max 16 MHz
-	CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
+    while (1) {
+        // because of continue, the first if block code will have higher priority over the other
+        ui16_TIM3_counter = TIM3_GetCounter();
+        if ((ui16_TIM3_counter - ui16_motor_controller_counter) > 4) {
+            // run every 4ms
+            ui16_motor_controller_counter = ui16_TIM3_counter;
+            motor_controller();
+            continue;
+        }
 
-	brake_init();
-	while (GPIO_ReadInputPin(BRAKE__PORT, BRAKE__PIN) == 0) ; // hold here while brake is pressed -- this is a protection for development
-	lights_init();
-	uart2_init();
-	timer2_init();  // 50 KHz and 2us pulse. (Not used ??)
-	timer3_init();  // 1KHz or 1ms period used for main loop timing
-	adc_init();
-	torque_sensor_init();
-	pas_init();
-	wheel_speed_sensor_init();
-	hall_sensor_init();
-	EEPROM_init(); // needed for pwm_init_bipolar_4q
-	pwm_init_bipolar_4q();  // init TIM1 at 15625Hz (64us)
-	enableInterrupts();
-
-	while (1) {
-		// because of continue, the first if block code will have higher priority over the other
-		ui16_TIM3_counter = TIM3_GetCounter();
-		if ((ui16_TIM3_counter - ui16_motor_controller_counter) > 4) {
-			// run every 4ms
-			ui16_motor_controller_counter = ui16_TIM3_counter;
-			motor_controller();
-			continue;
-		}
-
-		ui16_TIM3_counter = TIM3_GetCounter();
-		if ((ui16_TIM3_counter - ui16_ebike_app_controller_counter) > 25) {
-			// run every 25ms. Could also run faster. Max duration is 4ms. (tested on 18/7/2020)
-			ui16_ebike_app_controller_counter = ui16_TIM3_counter;
-			ebike_app_controller();
-		}
-	}
+        ui16_TIM3_counter = TIM3_GetCounter();
+        if ((ui16_TIM3_counter - ui16_ebike_app_controller_counter) > 25) {
+            // run every 25ms. Could also run faster. Max duration is 4ms. (tested on 18/7/2020)
+            ui16_ebike_app_controller_counter = ui16_TIM3_counter;
+            ebike_app_controller();
+        }
+    }
 }

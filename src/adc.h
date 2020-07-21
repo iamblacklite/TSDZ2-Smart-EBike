@@ -17,7 +17,6 @@
 #define UI8_ADC_THROTTLE                    (*(uint8_t*)(0x53EE)) // AIN7
 #define UI8_ADC_TORQUE_SENSOR               (*(uint8_t*)(0x53E8)) // AIN4
 
-
 #define UI16_ADC_10_BIT_BATTERY_VOLTAGE      (((*(uint8_t*)(0x53EC)) << 2) | (*(uint8_t*)(0x53ED)))
 #define UI16_ADC_10_BIT_BATTERY_CURRENT      (((*(uint8_t*)(0x53EA)) << 2) | (*(uint8_t*)(0x53EB)))
 #define UI16_ADC_10_BIT_THROTTLE             (((*(uint8_t*)(0x53EE)) << 2) | (*(uint8_t*)(0x53EF)))
@@ -27,8 +26,7 @@
 
 extern volatile uint16_t ui16_adc_pedal_torque_offset;
 
-
-void adc_init (void);
-uint16_t ui16_adc_read_battery_voltage_10b (void);
+void adc_init(void);
+uint16_t ui16_adc_read_battery_voltage_10b(void);
 
 #endif /* _ADC_H */
