@@ -348,14 +348,15 @@ uint8_t ui8_sin_table[SIN_TABLE_LEN] =
     127
 };
 
+// motor variables
 uint16_t ui16_PWM_cycles_counter = 1;
 uint16_t ui16_PWM_cycles_counter_6 = 1;
 uint16_t ui16_PWM_cycles_counter_total = 0xffff;
 uint16_t ui16_max_motor_speed_erps = MOTOR_OVER_SPEED_ERPS;
-static volatile uint16_t ui16_motor_speed_erps = 0;
 uint8_t ui8_motor_commutation_type = BLOCK_COMMUTATION;
 uint8_t ui8_hall_sensors_state = 0;
 uint8_t ui8_half_erps_flag = 0;
+volatile uint16_t ui16_motor_speed_erps = 0;
 
 
 // power variables
@@ -377,10 +378,14 @@ volatile uint8_t ui8_brake_state = 0;
 
 
 // cadence sensor
+#define NO_PAS_REF 5
 volatile uint16_t ui16_cadence_sensor_ticks = 0;
 volatile uint32_t ui32_crank_revolutions_x20 = 0;
 static uint16_t ui16_cadence_sensor_ticks_counter_min = CADENCE_SENSOR_CALC_COUNTER_MIN;
-
+static uint8_t ui8_pas_state_old = 4;
+static uint16_t ui16_cadence_calc_counter, ui16_cadence_stop_counter;
+static uint8_t ui8_cadence_calc_ref_state = NO_PAS_REF;
+static uint8_t ui8_pas_old_valid_state[4] = {0x01,0x03,0x00,0x02};
 
 
 // wheel speed sensor
@@ -413,22 +418,23 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
   static uint8_t ui8_motor_rotor_absolute_angle;
   static uint8_t ui8_svm_table_index;
   static uint8_t ui8_adc_motor_phase_current;
-  
-  
+
 
   /****************************************************************************/
-  
-  
+
+
   // read battery current ADC value | should happen at middle of the PWM duty_cycle
+  //ADC1_DataBufferCmd(DISABLE);
+  //ADC1->CR3 &= (uint8_t)(~ADC1_CR3_DBUF); // disable buffering
   ADC1->CR2 &= (uint8_t)(~ADC1_CR2_SCAN);   // disable scan mode
   ADC1->CSR = 0x05;                         // clear EOC flag first (select channel 5)
   ADC1->CR1 |= ADC1_CR1_ADON;               // start ADC1 conversion
-  
-  /* Moved to line 590 
+
+  /* Moved to line 590
   while (!(ADC1->CSR & ADC1_FLAG_EOC));     // wait for end of conversion
-  
+
   ui8_controller_adc_battery_current = ui16_adc_battery_current = UI16_ADC_10_BIT_BATTERY_CURRENT;
-  
+
   // calculate motor phase current ADC value
   if (ui8_g_duty_cycle > 0)
   {
@@ -438,7 +444,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
   {
     ui8_adc_motor_phase_current = 0;
   }
-  
+
   // trigger ADC conversion of all channels (scan conversion, buffered)
   ADC1->CR2 |= ADC1_CR2_SCAN;     // enable scan mode
   ADC1->CSR = 0x07;               // clear EOC flag first (select channel 7)
@@ -446,20 +452,21 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
 
 
   ****************************************************************************/
-  
+
+
   // read hall sensor signals and:
   // - find the motor rotor absolute angle
   // - calc motor speed in erps (ui16_motor_speed_erps)
   // - check so that motor is not rotating backwards, if it does, set ERPS to 0
-  
+
   static uint8_t ui8_hall_sensors_state_last;
-  
+
   // read hall sensors signal pins and mask other pins
   // hall sensors sequence with motor forward rotation: 4, 6, 2, 3, 1, 5
   ui8_hall_sensors_state = ((HALL_SENSOR_A__PORT->IDR & HALL_SENSOR_A__PIN) >> 5) |
                            ((HALL_SENSOR_B__PORT->IDR & HALL_SENSOR_B__PIN) >> 1) |
                            ((HALL_SENSOR_C__PORT->IDR & HALL_SENSOR_C__PIN) >> 3);
-                           
+
   // make sure we run next code only when there is a change on the hall sensors signal
   if (ui8_hall_sensors_state != ui8_hall_sensors_state_last)
   {
@@ -470,7 +477,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
       break;
 
       case 1:
-      
+
       // check half ERPS flag and motor rotational direction
       if ((ui8_half_erps_flag == 1) && (ui8_hall_sensors_state_last == 3))
       {
@@ -481,11 +488,11 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
         // this division takes 111 us if PWM_CYCLES_SECOND is a float. But with cast, (uint16_t) PWM_CYCLES_SECOND, it only takes 4.4 us. Verified on 2017.11.20
         if (ui16_PWM_cycles_counter_total > 0) // avoid division by 0
         {
-          ui16_motor_speed_erps = ((uint16_t) PWM_CYCLES_SECOND) / ui16_PWM_cycles_counter_total; 
+          ui16_motor_speed_erps = ((uint16_t) PWM_CYCLES_SECOND) / ui16_PWM_cycles_counter_total;
         }
         else
         {
-          ui16_motor_speed_erps = ((uint16_t) PWM_CYCLES_SECOND); 
+          ui16_motor_speed_erps = ((uint16_t) PWM_CYCLES_SECOND);
         }
 
         // update motor commutation state based on motor speed
@@ -499,9 +506,9 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
           ui8_g_foc_angle = 0;
         }
       }
-      
+
       ui8_motor_rotor_absolute_angle = (uint8_t) MOTOR_ROTOR_ANGLE_210;
-      
+
       break;
 
       case 5:
@@ -528,17 +535,17 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
       return;
       break;
     }
-    
+
     ui16_PWM_cycles_counter_6 = 1;
-    
+
     // update last hall sensor state
     ui8_hall_sensors_state_last = ui8_hall_sensors_state;
   }
 
 
   /****************************************************************************/
-  
-  
+
+
   // count number of fast loops / PWM cycles and reset some states when motor is near zero speed
   if (ui16_PWM_cycles_counter < PWM_CYCLES_COUNTER_MAX)
   {
@@ -559,10 +566,10 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
 
 
   /****************************************************************************/
-  
-  
+
+
   // - calc interpolation angle and sinewave table index
-  
+
 #define DO_INTERPOLATION 1 // may be useful to disable interpolation when debugging
 #if DO_INTERPOLATION == 1
   // calculate the interpolation angle (and it doesn't work when motor starts and at very low speeds)
@@ -582,14 +589,17 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
 
   // we need to put phase voltage 90 degrees ahead of rotor position, to get current 90 degrees ahead and have max torque per amp
   ui8_svm_table_index -= 63;
-  
-    
+
+
    /****************************************************************************/
-   
-   
+
+
     /* moved from function beginning to avoid some wasted time */
     while (!(ADC1->CSR & ADC1_FLAG_EOC));     // wait for end of conversion
 
+    // single conversion: do not use bufferd value
+    // 17.5 A ???
+    //ui8_controller_adc_battery_current = ui16_adc_battery_current = ((*(uint8_t*)(ADC1->DRH)) << 2) | (*(uint8_t*)(ADC1->DRL));
     ui8_controller_adc_battery_current = ui16_adc_battery_current = UI16_ADC_10_BIT_BATTERY_CURRENT;
 
     // calculate motor phase current ADC value
@@ -601,25 +611,27 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
     {
         ui8_adc_motor_phase_current = 0;
     }
-    
+
     // trigger ADC conversion of all channels (scan conversion, buffered)
     ADC1->CR2 |= ADC1_CR2_SCAN;     // enable scan mode
+    //ADC1_DataBufferCmd(ENABLE);
+    //ADC1->CR3 |= ADC1_CR3_DBUF;   // enable buffering
     ADC1->CSR = 0x07;               // clear EOC flag first (select channel 7)
     ADC1->CR1 |= ADC1_CR1_ADON;     // start ADC1 conversion
-    
-  
+
+
   /****************************************************************************/
-  
-  
+
+
   // brakes (consider in slower loop)
   // - check if brakes are installed and enabled
   // - check if coaster brake is engaged
   // - check if brakes are engaged
-  
+
   #define COASTER_BRAKE_TORQUE_THRESHOLD    40
-  
+
   // check if brakes are installed and enabled
-  
+
   // check if coaster brake is engaged
   if (UI16_ADC_10_BIT_TORQUE_SENSOR < (ui16_adc_pedal_torque_offset - COASTER_BRAKE_TORQUE_THRESHOLD))
   {
@@ -632,11 +644,11 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
     ui8_brake_state = !(GPIO_ReadInputPin(BRAKE__PORT, BRAKE__PIN));
   }
 
-  
+
   /****************************************************************************/
-  
-  
-  
+
+
+
   // PWM duty_cycle controller:
   // - limit battery undervoltage
   // - limit battery max current
@@ -646,7 +658,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
 
   static uint16_t ui16_counter_duty_cycle_ramp_up;
   static uint16_t ui16_counter_duty_cycle_ramp_down;
-  
+
   // check if to decrease, increase or maintain duty cycle
   if ((ui8_g_duty_cycle > ui8_controller_duty_cycle_target) ||
       (ui8_controller_adc_battery_current > ui8_controller_adc_battery_current_target) ||
@@ -657,12 +669,12 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
   {
     // reset duty cycle ramp up counter (filter)
     ui16_counter_duty_cycle_ramp_up = 0;
-    
+
     // ramp down duty cycle
     if (++ui16_counter_duty_cycle_ramp_down > ui16_controller_duty_cycle_ramp_down_inverse_step)
     {
       ui16_counter_duty_cycle_ramp_down = 0;
-      
+
       // decrement duty cycle
       if (ui8_g_duty_cycle > 0) { --ui8_g_duty_cycle; }
     }
@@ -671,12 +683,12 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
   {
     // reset duty cycle ramp down counter (filter)
     ui16_counter_duty_cycle_ramp_down = 0;
-    
+
     // ramp up duty cycle
     if (++ui16_counter_duty_cycle_ramp_up > ui16_controller_duty_cycle_ramp_up_inverse_step)
     {
       ui16_counter_duty_cycle_ramp_up = 0;
-      
+
       // increment duty cycle
       if (ui8_g_duty_cycle < PWM_DUTY_CYCLE_MAX) { ++ui8_g_duty_cycle; }
     }
@@ -687,21 +699,21 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
     ui16_counter_duty_cycle_ramp_up = 0;
     ui16_counter_duty_cycle_ramp_down = 0;
   }
-  
-  
-  
-  /****************************************************************************/
-  
 
-  
+
+
+  /****************************************************************************/
+
+
+
   // calculate final PWM duty_cycle values to be applied to TIMER1
-  
+
   uint8_t ui8_phase_a_voltage;
   uint8_t ui8_phase_b_voltage;
   uint8_t ui8_phase_c_voltage;
   uint8_t ui8_temp;
   uint16_t ui16_value;
-  
+
   // scale and apply PWM duty_cycle for the 3 phases
   // phase A is advanced 240 degrees over phase B
   ui8_temp = ui8_svm_table [(uint8_t) (ui8_svm_table_index + 171 /* 240º */)];
@@ -758,94 +770,101 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
   // phase A
   TIM1->CCR1H = (uint8_t) (ui8_phase_a_voltage >> 7);
   TIM1->CCR1L = (uint8_t) (ui8_phase_a_voltage << 1);
-  
-  
-  
+
+
+
   /****************************************************************************/
-  
-  
+
+
 	/*
-	* ui8_pas_state: PAS1=bit0 and PAS2=bit1
+	* - New pedal start/stop detection Algorithm (by MSpider65) -
+	*
+	* Pedal start/stop detection uses both transitions of both PAS sensors
+	* ui8_pas_state stores the PAS1 and PAS2 state: bit0=PAS1,  bit1=PAS2
 	* Pedal forward ui8_pas_state sequence is: 0x01 -> 0x00 -> 0x02 -> 0x03 -> 0x01
-	* Cadence calculated on 0x00 -> 0x02 transition
-	* Other transitions are used to detect movement (cadence set to 5RPM if previously stopped) -> three times faster startup detection
-	* Every transition resets the stop detection counter. -> three times faster stop detection
+	* After a stop, the first forward transition is taken as reference transition
+	* Following forward transition sets the cadence to 7RPM for immediate startup
+	* Then, starting form the second reference transition, the cadence is calculated based on counter value
+    * All transitions resets the stop detection counter (much faster stop detection):
 	*/
 
-	#define CADENCE_TICKS_5RPM 9375
-    // software based Schmitt trigger to stop motor jitter when at resolution limits
+    // ui16_cadence_sensor_ticks value for startup
+	#define CADENCE_TICKS_STARTUP 6250 // about 7-8 RPM
+	// software based Schmitt trigger to stop motor jitter when at resolution limits
 	#define CADENCE_SENSOR_STANDARD_MODE_SCHMITT_TRIGGER_THRESHOLD    350
 
-	static uint8_t ui8_pas_state_old = 4;
-	static uint16_t ui16_cadence_calc_counter, ui16_cadence_stop_counter;
-	static uint8_t ui8_cadence_calc_counter_started;
-	static uint8_t ui8_pas_old_valid_state[4] = {0x01,0x03,0x00,0x02};
-  
 	uint8_t ui8_pas_state = (PAS1__PORT->IDR & PAS1__PIN) | ((PAS2__PORT->IDR & PAS2__PIN) >> 6);
 
 	if (ui8_pas_state != ui8_pas_state_old) {
 		if (ui8_pas_state_old != ui8_pas_old_valid_state[ui8_pas_state]) {
-			// pedals rotates backward or too fast transition
+			// wrong state sequence: backward rotation
 			ui16_cadence_sensor_ticks = 0;
-			ui8_cadence_calc_counter_started = 0;
-		} else if (ui8_pas_state != 0x02) {
-			if (ui16_cadence_sensor_ticks == 0)
-				ui16_cadence_sensor_ticks = CADENCE_TICKS_5RPM;
-		} else {
-			// main transition 0x00 -> 0x02 (calculation of the correct cadence)
-			ui32_crank_revolutions_x20++;
-			ui16_cadence_sensor_ticks_counter_min = ui16_cadence_sensor_ticks_counter_min_speed_adjusted;
-
-			if (ui8_cadence_calc_counter_started) {
-				ui16_cadence_sensor_ticks = ui16_cadence_calc_counter;
-				// software based Schmitt trigger to stop motor jitter when at resolution limits
-				ui16_cadence_sensor_ticks_counter_min += CADENCE_SENSOR_STANDARD_MODE_SCHMITT_TRIGGER_THRESHOLD;
-			} else {
-				ui8_cadence_calc_counter_started = 1;
-				ui16_cadence_sensor_ticks = CADENCE_TICKS_5RPM;
-			}
-			ui16_cadence_calc_counter = 0;
+			ui8_cadence_calc_ref_state = NO_PAS_REF;
+			goto skip_cadence;
 		}
+
+		ui16_cadence_sensor_ticks_counter_min = ui16_cadence_sensor_ticks_counter_min_speed_adjusted;
+
+		if (ui8_pas_state == ui8_cadence_calc_ref_state) {
+			// ui16_cadence_calc_counter is valid for cadence calculation
+			ui16_cadence_sensor_ticks = ui16_cadence_calc_counter;
+			ui16_cadence_calc_counter = 0;
+			// software based Schmitt trigger to stop motor jitter when at resolution limits
+			ui16_cadence_sensor_ticks_counter_min += CADENCE_SENSOR_STANDARD_MODE_SCHMITT_TRIGGER_THRESHOLD;
+		} else if (ui8_cadence_calc_ref_state == NO_PAS_REF) {
+			// this is the new reference state for cadence calculation
+			ui8_cadence_calc_ref_state = ui8_pas_state;
+			ui16_cadence_calc_counter = 0;
+		} else if (ui16_cadence_sensor_ticks == 0) {
+			// Waiting the second reference transition: set the cadence to 7 RPM for immediate start
+			ui16_cadence_sensor_ticks = CADENCE_TICKS_STARTUP;
+		}
+		// Reference state for crank revolution counter increment
+		if (ui8_pas_state == 0)
+			ui32_crank_revolutions_x20++;
+
+		skip_cadence:
 		// reset the counter used to detect pedal stop
 		ui16_cadence_stop_counter = 0;
 		// save current PAS state
 		ui8_pas_state_old = ui8_pas_state;
 	}
 
+
 	if (++ui16_cadence_stop_counter > ui16_cadence_sensor_ticks_counter_min) {
 		// pedals stop detected
 		ui16_cadence_sensor_ticks = 0;
 		ui16_cadence_stop_counter = 0;
-		ui8_cadence_calc_counter_started = 0;
-	} else if (ui8_cadence_calc_counter_started) {
+		ui8_cadence_calc_ref_state = NO_PAS_REF;
+	} else if (ui8_cadence_calc_ref_state != NO_PAS_REF) {
 		// increment cadence tick counter
 		++ui16_cadence_calc_counter;
 	}
-  
-  
-  
+
+
+
   /****************************************************************************/
-  
-  
-  
+
+
+
   static uint16_t ui16_wheel_speed_sensor_ticks_counter;
   static uint8_t ui8_wheel_speed_sensor_ticks_counter_started;
   static uint8_t ui8_wheel_speed_sensor_pin_state_old;
-  
+
   // check wheel speed sensor pin state
   uint8_t ui8_wheel_speed_sensor_pin_state = WHEEL_SPEED_SENSOR__PORT->IDR & WHEEL_SPEED_SENSOR__PIN;
-  
+
   // check if wheel speed sensor pin state has changed
   if (ui8_wheel_speed_sensor_pin_state != ui8_wheel_speed_sensor_pin_state_old)
-  { 
+  {
     // update old wheel speed sensor pin state
     ui8_wheel_speed_sensor_pin_state_old = ui8_wheel_speed_sensor_pin_state;
-    
+
     // only consider the 0 -> 1 transition
     if (ui8_wheel_speed_sensor_pin_state)
     {
       // check if first transition
-      if (!ui8_wheel_speed_sensor_ticks_counter_started) 
+      if (!ui8_wheel_speed_sensor_ticks_counter_started)
       {
         // start wheel speed sensor ticks counter as this is the first transition
         ui8_wheel_speed_sensor_ticks_counter_started = 1;
@@ -868,7 +887,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
       }
     }
   }
-  
+
   // increment and also limit the ticks counter
   if (ui8_wheel_speed_sensor_ticks_counter_started)
       if (ui16_wheel_speed_sensor_ticks_counter < WHEEL_SPEED_SENSOR_TICKS_COUNTER_MIN) {
@@ -904,34 +923,24 @@ void hall_sensor_init(void)
 }
 
 
-uint16_t ui16_motor_get_motor_speed_erps(void)
-{
-  return ui16_motor_speed_erps;
-}
-
-
 void read_battery_voltage(void)
 {
   #define READ_BATTERY_VOLTAGE_FILTER_COEFFICIENT   2
 
   /*---------------------------------------------------------
-    NOTE: regarding filter coefficients 
+    NOTE: regarding filter coefficients
 
     Possible values: 0, 1, 2, 3, 4, 5, 6
-    0 equals to no filtering and no delay, higher values 
+    0 equals to no filtering and no delay, higher values
     will increase filtering but will also add a bigger delay.
   ---------------------------------------------------------*/
 
   static uint16_t ui16_adc_battery_voltage_accumulated;
-  
+
   // low pass filter the voltage readed value, to avoid possible fast spikes/noise
   ui16_adc_battery_voltage_accumulated -= ui16_adc_battery_voltage_accumulated >> READ_BATTERY_VOLTAGE_FILTER_COEFFICIENT;
   ui16_adc_battery_voltage_accumulated += ui16_adc_read_battery_voltage_10b();
   ui16_adc_battery_voltage_filtered = ui16_adc_battery_voltage_accumulated >> READ_BATTERY_VOLTAGE_FILTER_COEFFICIENT;
-  
-  // prototype filter, do not use, not tuned, ask Leon
-/*   ui16_adc_battery_voltage_filtered = (ui16_adc_read_battery_voltage_10b() + ui16_adc_battery_voltage_accumulated) >> READ_BATTERY_VOLTAGE_FILTER_COEFFICIENT;
-  ui16_adc_battery_voltage_accumulated = ui16_adc_battery_voltage_filtered; */
 }
 
 
@@ -940,15 +949,15 @@ void read_battery_current(void)
   #define READ_BATTERY_CURRENT_FILTER_COEFFICIENT   2
 
   /*---------------------------------------------------------
-    NOTE: regarding filter coefficients 
+    NOTE: regarding filter coefficients
 
     Possible values: 0, 1, 2, 3, 4, 5, 6
-    0 equals to no filtering and no delay, higher values 
+    0 equals to no filtering and no delay, higher values
     will increase filtering but will also add a bigger delay.
   ---------------------------------------------------------*/
 
   static uint16_t ui16_adc_battery_current_accumulated;
-  
+
   // low pass filter the positive battery readed value (no regen current), to avoid possible fast spikes/noise
   ui16_adc_battery_current_accumulated -= ui16_adc_battery_current_accumulated >> READ_BATTERY_CURRENT_FILTER_COEFFICIENT;
   ui16_adc_battery_current_accumulated += ui16_adc_battery_current;
@@ -1011,7 +1020,7 @@ void calc_foc_angle(void)
   // ui32_l_x1048576 = 142 <--- THIS VALUE WAS verified experimentaly on 2018.07 to be near the best value for a 48V motor
   // Test done with a fixed mechanical load, duty_cycle = 200 and 100 and measured battery current was 16 and 6 (10 and 4 amps)
   // ---------------------------------------------------------------------------------------------------------------------
-  
+
   switch (p_configuration_variables->ui8_motor_type)
   {
     case 0:
@@ -1023,12 +1032,12 @@ void calc_foc_angle(void)
       ui32_l_x1048576 = 84; // 36 V motor
       ui16_max_motor_speed_erps = (uint16_t) MOTOR_OVER_SPEED_ERPS;
     break;
-    
+
     case 2: // experimental high cadence mode for 48 volt motor
       ui32_l_x1048576 = 199;
       ui16_max_motor_speed_erps = (uint16_t) MOTOR_OVER_SPEED_ERPS_EXPERIMENTAL;
     break;
-    
+
     case 3: // experimental high cadence mode for 36 volt motor
       ui32_l_x1048576 = 115;
       ui16_max_motor_speed_erps = (uint16_t) MOTOR_OVER_SPEED_ERPS_EXPERIMENTAL;

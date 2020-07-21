@@ -38,6 +38,8 @@ void adc_init (void)
             DISABLE);
 
   ADC1_ScanModeCmd(ENABLE);		   // enable scan mode
+  //ADC1_DataBufferCmd(ENABLE);
+  //ADC1->CR3 |= ADC1_CR3_DBUF;
   ADC1_Cmd(ENABLE);
   ADC1_ClearFlag(ADC1_FLAG_EOC);
   ADC1_StartConversion();          // start ADC1 conversion
@@ -46,7 +48,7 @@ void adc_init (void)
   for (ui16_i = 0; ui16_i < ADC_DELAY_TIME; ++ui16_i)
   {
     ui16_counter = TIM3_GetCounter() + 10; // delay ~10 ms
-    
+
     // wait for delay
     while (TIM3_GetCounter() < ui16_counter);
   }

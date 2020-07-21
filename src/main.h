@@ -165,5 +165,4 @@
 #define BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X100                  17  // conversion value verified with a cheap power meter
 
 
-
 #endif // _MAIN_H_
