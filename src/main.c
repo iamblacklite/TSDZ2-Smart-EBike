@@ -21,7 +21,6 @@
 #include "timers.h"
 #include "ebike_app.h"
 #include "torque_sensor.h"
-#include "eeprom.h"
 #include "lights.h"
 
 /////////////////////////////////////////////////////////////////////////////////////////////
@@ -80,7 +79,6 @@ int main(void) {
     pas_init();
     wheel_speed_sensor_init();
     hall_sensor_init();
-    EEPROM_init(); // needed for pwm_init_bipolar_4q
     pwm_init_bipolar_4q();  // init TIM1 at 15625Hz (64us)
     enableInterrupts();
 
