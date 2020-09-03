@@ -13,6 +13,7 @@
 #include "stm8s_uart2.h"
 #include "interrupts.h"
 
+
 void uart2_init(void) {
     UART2_DeInit();
 

@@ -38,12 +38,11 @@
 #define TEMPERATURE_CONTROL                       1
 #define THROTTLE_CONTROL                          2
 
-int32_t map(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, int32_t out_max);
-int32_t map_inverse(int32_t x, int32_t in_min, int32_t in_max, int32_t out_min, int32_t out_max);
+int16_t map_ui16(int16_t x, int16_t in_min, int16_t in_max, int16_t out_min, int16_t out_max);
+uint8_t map_ui8(uint8_t x, uint8_t in_min, uint8_t in_max, uint8_t out_max, uint8_t out_min);
 uint8_t ui8_max(uint8_t value_a, uint8_t value_b);
 uint8_t ui8_min(uint8_t value_a, uint8_t value_b);
-uint32_t filter(uint32_t ui32_new_value, uint32_t ui32_old_value, uint8_t ui8_alpha);
-void ui8_limit_max(uint8_t *ui8_p_value, uint8_t ui8_max_value);
+uint16_t filter(uint16_t ui16_new_value, uint16_t ui16_old_value, uint8_t ui8_alpha);
 void crc16(uint8_t ui8_data, uint16_t *ui16_crc);
 
 #endif /* COMMON_COMMON_H_ */

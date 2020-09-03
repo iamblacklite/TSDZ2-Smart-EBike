@@ -16,8 +16,6 @@
 #include "motor.h"
 #include "common.h"
 
-volatile uint16_t ui16_adc_pedal_torque_offset = 100;
-
 
 void adc_init(void) {
     //init GPIO for the used ADC pins
