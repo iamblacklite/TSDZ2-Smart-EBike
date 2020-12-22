@@ -13,7 +13,7 @@
 
 // motor states
 #define BLOCK_COMMUTATION 			            0
-#define SINEWAVE_INTERPOLATION_60_DEGREES 	    1
+#define SINEWAVE_INTERPOLATION_60_DEGREES 	    0x80
 
 // power variables
 extern volatile uint8_t ui8_controller_duty_cycle_ramp_up_inverse_step;
@@ -23,7 +23,7 @@ extern volatile uint8_t ui8_adc_battery_voltage_cut_off;
 extern volatile uint8_t ui8_adc_battery_current_filtered;
 extern volatile uint8_t ui8_controller_adc_battery_current_target;
 extern volatile uint8_t ui8_g_duty_cycle;
-extern volatile uint8_t ui8_fw_angle;
+extern volatile uint8_t ui8_fw_hall_counter_offset;
 extern volatile uint8_t ui8_controller_duty_cycle_target;
 extern volatile uint8_t ui8_g_foc_angle;
 

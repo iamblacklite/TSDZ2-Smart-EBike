@@ -28,5 +28,5 @@ void uart2_init(void) {
 
     // Set UART2 TX IRQ priority to level 1 :0=lowest - 3=highest(default value)
     ITC_SetSoftwarePriority(UART2_TX_IRQHANDLER, ITC_PRIORITYLEVEL_1);
-    ITC_SetSoftwarePriority(UART2_RX_IRQHANDLER, ITC_PRIORITYLEVEL_2);
+    ITC_SetSoftwarePriority(UART2_RX_IRQHANDLER, ITC_PRIORITYLEVEL_1);
 }

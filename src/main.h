@@ -10,16 +10,16 @@
 #define _MAIN_H_
 
 //#define DEBUG_UART
-//#define PWM_TIME_DEBUG
+#define PWM_TIME_DEBUG
 //#define MAIN_TIME_DEBUG
 
-#define FW_VERSION 7
+#define FW_VERSION 9
 
 // PWM related values
 // motor
 #define PWM_CYCLES_SECOND                                       19047U // 52us (PWM period)
-#define PWM_CYCLES_COUNTER_MAX                                  3800U  // 5 erps minimum speed -> 1/5 = 200 ms; 200 ms / 50 us = 4000 (3125 at 15.625KHz)
-#define DOUBLE_PWM_CYCLES_SECOND                                38094 // 25us (2 irq x PWM period)
+#define HALL_COUNTER_FREQ                                       250000U // 250KHz or 4us
+#define HALL_COUNTER_INTERP_MAX                                 4166 // (HALL_COUNTER_FREQ/MOTOR_ROTOR_INTERPOLATION_MIN_ERPS/6)
 // ramp up/down PWM cycles count
 #define PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_DEFAULT             195    // 160 -> 160 * 64 us for every duty cycle increment at 15.625KHz
 #define PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN                 24     // 20 -> 20 * 64 us for every duty cycle increment at 15.625KHz
@@ -43,6 +43,8 @@
 #define PWM_DUTY_CYCLE_MAX                                        254
 #define MIDDLE_SVM_TABLE                                          106
 #define MIDDLE_PWM_COUNTER                                        105
+#define HALL_COUNTER_FIXED_OFFSET                                 18  // 18*4=72us (20us delay compensation + 52us offset)
+#define FW_HALL_COUNTER_OFFSET_MAX                                6
 
 /*---------------------------------------------------------
  NOTE: regarding duty cycle (PWM) ramping
@@ -54,13 +56,13 @@
  low values for acceleration.
  ---------------------------------------------------------*/
 
-#define MOTOR_ROTOR_OFFSET_ANGLE                                  10
-#define MOTOR_ROTOR_ANGLE_90                                      (63  + MOTOR_ROTOR_OFFSET_ANGLE)
-#define MOTOR_ROTOR_ANGLE_150                                     (106 + MOTOR_ROTOR_OFFSET_ANGLE)
-#define MOTOR_ROTOR_ANGLE_210                                     (148 + MOTOR_ROTOR_OFFSET_ANGLE)
-#define MOTOR_ROTOR_ANGLE_270                                     (191 + MOTOR_ROTOR_OFFSET_ANGLE)
-#define MOTOR_ROTOR_ANGLE_330                                     (233 + MOTOR_ROTOR_OFFSET_ANGLE)
-#define MOTOR_ROTOR_ANGLE_30                                      (20  + MOTOR_ROTOR_OFFSET_ANGLE)
+#define MOTOR_ROTOR_OFFSET_ANGLE                                  (uint8_t)10
+#define MOTOR_ROTOR_ANGLE_90                                      (uint8_t)((uint8_t)63  + MOTOR_ROTOR_OFFSET_ANGLE)
+#define MOTOR_ROTOR_ANGLE_150                                     (uint8_t)((uint8_t)106 + MOTOR_ROTOR_OFFSET_ANGLE)
+#define MOTOR_ROTOR_ANGLE_210                                     (uint8_t)((uint8_t)148 + MOTOR_ROTOR_OFFSET_ANGLE)
+#define MOTOR_ROTOR_ANGLE_270                                     (uint8_t)((uint8_t)191 + MOTOR_ROTOR_OFFSET_ANGLE)
+#define MOTOR_ROTOR_ANGLE_330                                     (uint8_t)((uint8_t)233 + MOTOR_ROTOR_OFFSET_ANGLE)
+#define MOTOR_ROTOR_ANGLE_30                                      (uint8_t)((uint8_t)20  + MOTOR_ROTOR_OFFSET_ANGLE)
 
 /*---------------------------------------------------------
  NOTE: regarding motor rotor offset
@@ -71,7 +73,7 @@
  for the lowest battery current possible.
  ---------------------------------------------------------*/
 
-#define MOTOR_ROTOR_ERPS_START_INTERPOLATION_60_DEGREES           10
+#define MOTOR_ROTOR_INTERPOLATION_MIN_ERPS     10
 
 // Torque sensor values
 #define ADC_TORQUE_SENSOR_CALIBRATION_OFFSET    6
