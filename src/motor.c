@@ -8,6 +8,7 @@
 
 #include <stdint.h>
 #include <stdio.h>
+#include <math.h>
 #include "motor.h"
 #include "interrupts.h"
 #include "stm8s_gpio.h"
@@ -18,7 +19,6 @@
 #include "adc.h"
 #include "uart.h"
 #include "adc.h"
-#include "math.h"
 #include "common.h"
 
 #define SVM_TABLE_LEN   256
@@ -42,10 +42,10 @@ uint8_t ui8_sin_table[SIN_TABLE_LEN] = { 3, 6, 9, 12, 16, 19, 22, 25, 28, 31, 34
 
 // motor variables
 uint8_t ui8_hall_360_ref_valid = 0;
-uint16_t ui16_hall_counter_total = 0xffff;
 uint8_t ui8_motor_commutation_type = BLOCK_COMMUTATION;
+static uint8_t ui8_motor_phase_absolute_angle;
+volatile uint16_t ui16_hall_counter_total = 0xffff;
 volatile uint16_t ui16_motor_speed_erps = 0;
-static uint8_t ui8_motor_rotor_absolute_angle;
 
 
 // power variables
@@ -59,6 +59,8 @@ volatile uint8_t ui8_g_duty_cycle = 0;
 volatile uint8_t ui8_fw_hall_counter_offset = 0;
 volatile uint8_t ui8_controller_duty_cycle_target = 0;
 volatile uint8_t ui8_g_foc_angle = 0;
+volatile uint8_t ui8_rotor_angle_adj = 0;
+
 static uint8_t ui8_counter_duty_cycle_ramp_up = 0;
 static uint8_t ui8_counter_duty_cycle_ramp_down = 0;
 
@@ -161,26 +163,19 @@ void HALL_SENSOR_C_PORT_IRQHandler(void) __interrupt(EXTI_HALL_C_IRQ)  {
         ui8_hall_state_irq |= (unsigned char)0x04;
 }
 
+// Last rotor complete revolution reference counter value
 static uint16_t ui16_hall_360_ref;
-static uint16_t ui16_hall_60_ref;
+// Last Hall sensor state
 static uint8_t  ui8_hall_sensors_state_last;
-
-static uint8_t  ui8_temp;
+// temporay variables (at the end of down irq stores phase a,b,c voltages)
 static uint16_t ui16_a;
 static uint16_t ui16_b;
 static uint16_t ui16_c;
+// Last Hall transition reference counter value
 static uint16_t ui16_hall_60_ref_old;
-uint16_t ui16_hall_ref_cnt[6];
-
-const static uint8_t ui8_rotor_hall_ref_angle[8] = {
-        0,
-        MOTOR_ROTOR_ANGLE_210,
-        MOTOR_ROTOR_ANGLE_90,
-        MOTOR_ROTOR_ANGLE_150,
-        MOTOR_ROTOR_ANGLE_330,
-        MOTOR_ROTOR_ANGLE_270,
-        MOTOR_ROTOR_ANGLE_30,
-        0 };
+// Hall Timer counter value calculated for the 6 different Hall transitions intervals
+volatile uint16_t ui16_hall_ref_cnt[6];
+static uint8_t  ui8_temp;
 
 void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
 {
@@ -204,8 +199,8 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             sim                 // disable interrupts  (set I0,I1 bits of CC register to 1,1)
                                 // Hall GPIO interrupt is buffered during this interval
             mov _ui8_temp+0, _ui8_hall_state_irq+0
-            mov _ui16_hall_60_ref+0, _ui8_hall_60_ref_irq+0
-            mov _ui16_hall_60_ref+1, _ui8_hall_60_ref_irq+1
+            mov _ui16_b+0, _ui8_hall_60_ref_irq+0
+            mov _ui16_b+1, _ui8_hall_60_ref_irq+1
             pop cc              // enable interrupts (restores previous value of Interrupt mask)
                                 // Hall GPIO buffered interrupt could fire now
             mov _ui16_a+0, 0x5328 // TIM3->CNTRH
@@ -213,6 +208,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
         __endasm;
         #endif
         // ui8_temp stores the current Hall sensor state
+        // ui16_b stores the Hall sensor counter value of the last transition
         // ui16_a stores the current Hall sensor counter value
 
         // run next code only when the hall sensors signal changes
@@ -220,47 +216,47 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             // Check first the state with the heaviest computation
             if (ui8_temp == 0x01) {
                 if (ui8_hall_360_ref_valid && (ui8_hall_sensors_state_last == 0x03)) {
-                    ui16_hall_counter_total = ui16_hall_60_ref - ui16_hall_360_ref;
+                    ui16_hall_counter_total = ui16_b - ui16_hall_360_ref;
                     ui8_motor_commutation_type = SINEWAVE_INTERPOLATION_60_DEGREES;
                 }
-                ui16_hall_360_ref = ui16_hall_60_ref;
+                ui16_hall_360_ref = ui16_b;
                 ui8_hall_360_ref_valid = 1;
-                ui8_motor_rotor_absolute_angle = (uint8_t) MOTOR_ROTOR_ANGLE_210;
-                ui16_hall_ref_cnt[0] = ui16_hall_60_ref - ui16_hall_60_ref_old;
+                ui8_motor_phase_absolute_angle = (uint8_t) PHASE_ROTOR_ANGLE_210;
+                ui16_hall_ref_cnt[3] = ui16_b - ui16_hall_60_ref_old;
             } else
                 switch (ui8_temp) {
                     case 0x06:
-                        ui8_motor_rotor_absolute_angle = (uint8_t) MOTOR_ROTOR_ANGLE_30;
-                        ui16_hall_ref_cnt[5] = ui16_hall_60_ref - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = (uint8_t) PHASE_ROTOR_ANGLE_30;
+                        ui16_hall_ref_cnt[0] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     case 0x05:
-                        ui8_motor_rotor_absolute_angle = (uint8_t) MOTOR_ROTOR_ANGLE_270;
-                        ui16_hall_ref_cnt[4] = ui16_hall_60_ref - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = (uint8_t) PHASE_ROTOR_ANGLE_270;
+                        ui16_hall_ref_cnt[4] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     case 0x04:
-                        ui8_motor_rotor_absolute_angle = (uint8_t) MOTOR_ROTOR_ANGLE_330;
-                        ui16_hall_ref_cnt[3] = ui16_hall_60_ref - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = (uint8_t) PHASE_ROTOR_ANGLE_330;
+                        ui16_hall_ref_cnt[5] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     case 0x02:
-                        ui8_motor_rotor_absolute_angle = (uint8_t) MOTOR_ROTOR_ANGLE_90;
-                        ui16_hall_ref_cnt[1] = ui16_hall_60_ref - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = (uint8_t) PHASE_ROTOR_ANGLE_90;
+                        ui16_hall_ref_cnt[1] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     case 0x03:
-                        ui8_motor_rotor_absolute_angle = (uint8_t) MOTOR_ROTOR_ANGLE_150;
-                        ui16_hall_ref_cnt[2] = ui16_hall_60_ref - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = (uint8_t) PHASE_ROTOR_ANGLE_150;
+                        ui16_hall_ref_cnt[2] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     default:
                         return;
                 }
 
             // update last hall sensor state
-            ui16_hall_60_ref_old = ui16_hall_60_ref;
+            ui16_hall_60_ref_old = ui16_b;
             ui8_hall_sensors_state_last = ui8_temp;
         }
 
         // Verify if rotor stopped (< 10 ERPS)
         // store in ui16_a the Hall counter ticks from the last Hall sensor transition
-        ui16_a = ui16_a - ui16_hall_60_ref;
+        ui16_a = ui16_a - ui16_b;
         if (ui16_a > (HALL_COUNTER_FREQ/MOTOR_ROTOR_INTERPOLATION_MIN_ERPS/6)) {
             ui8_motor_commutation_type = BLOCK_COMMUTATION;
             ui8_g_foc_angle = 0;
@@ -281,7 +277,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             // ---------
             // Avoid to use the slow _divulong library function.
             // Faster implementation of the above operation based on the following assumptions:
-            // 1) ui16_a < 8192 (only 13 significant bits of 16)
+            // 1) ui16_a < 8192 (only 13 of 16 significants bits)
             // 2) LSB of (ui16_a << 8) is obviously 0x00
             // 3) the result should be less than 256/6 (hall spacing of 60deg) + 12 (max offset) ~= 55 (scale 0-255)
             uint8_t ui8_cnt = 6;
@@ -298,7 +294,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             } while (--ui8_cnt);
         }
         // we need to put phase voltage 90 degrees ahead of rotor position, to get current 90 degrees ahead and have max torque per amp
-        ui8_svm_table_index = ui8_temp + ui8_motor_rotor_absolute_angle + ui8_g_foc_angle - 63;
+        ui8_svm_table_index = ui8_temp + ui8_motor_phase_absolute_angle + ui8_g_foc_angle + ui8_rotor_angle_adj;
         */
         #ifndef __CDT_PARSER__ // disable Eclipse syntax check
         __asm
@@ -326,11 +322,11 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             jrne 00012$
             // _ui8_temp contains interpolation angle
         00011$: // BLOCK_COMMUTATION
-            // ui8_svm_table_index = ui8_temp + ui8_motor_rotor_absolute_angle + ui8_g_foc_angle - 63;
+            // ui8_svm_table_index = ui8_temp + ui8_motor_phase_absolute_angle + ui8_g_foc_angle + ui8_rotor_angle_adj;
             ld  a, _ui8_temp+0
-            add a, _ui8_motor_rotor_absolute_angle+0
+            add a, _ui8_motor_phase_absolute_angle+0
             add a, _ui8_g_foc_angle+0
-            sub a, #0x3f
+            add a, _ui8_rotor_angle_adj
             ld _ui8_temp, a
         __endasm;
         #endif
@@ -561,7 +557,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
     } else {
         // CRITICAL SECTION !
         // Disable GPIO Hall interrupt during PWM counter update
-        // The whole update is completed in 16 CPU cycles
+        // The whole update is completed in 9 CPU cycles
         // set final duty_cycle value
         /*
         // phase B

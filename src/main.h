@@ -10,10 +10,10 @@
 #define _MAIN_H_
 
 //#define DEBUG_UART
-#define PWM_TIME_DEBUG
+//#define PWM_TIME_DEBUG
 //#define MAIN_TIME_DEBUG
 
-#define FW_VERSION 9
+#define FW_VERSION 10
 
 // PWM related values
 // motor
@@ -44,7 +44,7 @@
 #define MIDDLE_SVM_TABLE                                          106
 #define MIDDLE_PWM_COUNTER                                        105
 #define HALL_COUNTER_FIXED_OFFSET                                 18  // 18*4=72us (20us delay compensation + 52us offset)
-#define FW_HALL_COUNTER_OFFSET_MAX                                6
+#define FW_HALL_COUNTER_OFFSET_MAX                                12
 
 /*---------------------------------------------------------
  NOTE: regarding duty cycle (PWM) ramping
@@ -56,13 +56,13 @@
  low values for acceleration.
  ---------------------------------------------------------*/
 
-#define MOTOR_ROTOR_OFFSET_ANGLE                                  (uint8_t)10
-#define MOTOR_ROTOR_ANGLE_90                                      (uint8_t)((uint8_t)63  + MOTOR_ROTOR_OFFSET_ANGLE)
-#define MOTOR_ROTOR_ANGLE_150                                     (uint8_t)((uint8_t)106 + MOTOR_ROTOR_OFFSET_ANGLE)
-#define MOTOR_ROTOR_ANGLE_210                                     (uint8_t)((uint8_t)148 + MOTOR_ROTOR_OFFSET_ANGLE)
-#define MOTOR_ROTOR_ANGLE_270                                     (uint8_t)((uint8_t)191 + MOTOR_ROTOR_OFFSET_ANGLE)
-#define MOTOR_ROTOR_ANGLE_330                                     (uint8_t)((uint8_t)233 + MOTOR_ROTOR_OFFSET_ANGLE)
-#define MOTOR_ROTOR_ANGLE_30                                      (uint8_t)((uint8_t)20  + MOTOR_ROTOR_OFFSET_ANGLE)
+#define MOTOR_ROTOR_OFFSET_ANGLE                    (uint8_t)10
+#define PHASE_ROTOR_ANGLE_90                        (uint8_t)((uint8_t)64  + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
+#define PHASE_ROTOR_ANGLE_150                       (uint8_t)((uint8_t)107 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
+#define PHASE_ROTOR_ANGLE_210                       (uint8_t)((uint8_t)149 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
+#define PHASE_ROTOR_ANGLE_270                       (uint8_t)((uint8_t)192 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
+#define PHASE_ROTOR_ANGLE_330                       (uint8_t)((uint8_t)235 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
+#define PHASE_ROTOR_ANGLE_30                        (uint8_t)((uint8_t)21  + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
 
 /*---------------------------------------------------------
  NOTE: regarding motor rotor offset
