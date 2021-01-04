@@ -44,7 +44,7 @@
 #define MIDDLE_SVM_TABLE                                          106
 #define MIDDLE_PWM_COUNTER                                        105
 #define HALL_COUNTER_FIXED_OFFSET                                 18  // 18*4=72us (20us delay compensation + 52us offset)
-#define FW_HALL_COUNTER_OFFSET_MAX                                12
+#define FW_HALL_COUNTER_OFFSET_MAX                                8
 
 /*---------------------------------------------------------
  NOTE: regarding duty cycle (PWM) ramping
