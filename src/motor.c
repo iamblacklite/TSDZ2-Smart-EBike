@@ -24,7 +24,7 @@
 #define SVM_TABLE_LEN   256
 #define SIN_TABLE_LEN   59
 
-uint8_t ui8_svm_table[SVM_TABLE_LEN] = { 199, 200, 202, 203, 204, 205, 206, 207, 208, 208, 209, 210, 210, 211, 211, 211,
+static const uint8_t ui8_svm_table[SVM_TABLE_LEN] = { 199, 200, 202, 203, 204, 205, 206, 207, 208, 208, 209, 210, 210, 211, 211, 211,
         212, 212, 212, 212, 212, 212, 212, 212, 211, 211, 211, 210, 210, 209, 208, 208, 207, 206, 206, 205, 204, 203,
         202, 201, 200, 199, 196, 192, 188, 184, 180, 176, 172, 167, 163, 159, 154, 150, 146, 141, 137, 133, 128, 124,
         119, 115, 110, 106, 102, 97, 93, 88, 84, 79, 75, 71, 66, 62, 58, 53, 49, 45, 40, 36, 32, 28, 24, 20, 16, 13, 12,
@@ -36,7 +36,7 @@ uint8_t ui8_svm_table[SVM_TABLE_LEN] = { 199, 200, 202, 203, 204, 205, 206, 207,
         212, 212, 212, 212, 212, 212, 211, 211, 211, 210, 210, 209, 208, 208, 207, 206, 205, 204, 203, 202, 200, 199,
         198 };
 
-uint8_t ui8_sin_table[SIN_TABLE_LEN] = { 3, 6, 9, 12, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49, 52, 54, 57, 60,
+static const uint8_t ui8_sin_table[SIN_TABLE_LEN] = { 3, 6, 9, 12, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49, 52, 54, 57, 60,
         63, 66, 68, 71, 73, 76, 78, 81, 83, 86, 88, 90, 92, 95, 97, 99, 101, 102, 104, 106, 108, 109, 111, 113, 114,
         115, 117, 118, 119, 120, 121, 122, 123, 124, 125, 125, 126, 126, 127 };
 
@@ -59,7 +59,7 @@ volatile uint8_t ui8_g_duty_cycle = 0;
 volatile uint8_t ui8_fw_hall_counter_offset = 0;
 volatile uint8_t ui8_controller_duty_cycle_target = 0;
 volatile uint8_t ui8_g_foc_angle = 0;
-volatile uint8_t ui8_rotor_angle_adj = 0;
+volatile uint8_t ui8_phase_angle_adj = 0;
 
 static uint8_t ui8_counter_duty_cycle_ramp_up = 0;
 static uint8_t ui8_counter_duty_cycle_ramp_down = 0;
@@ -166,7 +166,7 @@ void HALL_SENSOR_C_PORT_IRQHandler(void) __interrupt(EXTI_HALL_C_IRQ)  {
 // Last rotor complete revolution reference counter value
 static uint16_t ui16_hall_360_ref;
 // Last Hall sensor state
-static uint8_t  ui8_hall_sensors_state_last;
+static uint8_t  ui8_hall_sensors_state_last = 0; // Invalid value, force execution of Hall code at the first run
 // temporay variables (at the end of down irq stores phase a,b,c voltages)
 static uint16_t ui16_a;
 static uint16_t ui16_b;
@@ -174,7 +174,20 @@ static uint16_t ui16_c;
 // Last Hall transition reference counter value
 static uint16_t ui16_hall_60_ref_old;
 // Hall Timer counter value calculated for the 6 different Hall transitions intervals
-volatile uint16_t ui16_hall_ref_cnt[6];
+volatile uint16_t ui16_hall_calib_cnt[6];
+
+volatile uint8_t ui8_hall_ref_angles[6] = {
+		PHASE_ROTOR_ANGLE_30,
+		PHASE_ROTOR_ANGLE_90,
+		PHASE_ROTOR_ANGLE_150,
+		PHASE_ROTOR_ANGLE_210,
+		PHASE_ROTOR_ANGLE_270,
+		PHASE_ROTOR_ANGLE_330};
+volatile uint8_t ui8_hall_counter_offset_up = HALL_COUNTER_OFFSET_UP;
+volatile uint8_t ui8_hall_counter_offset_down = HALL_COUNTER_OFFSET_DOWN;
+
+
+static uint8_t ui8_hall_counter_offset;
 static uint8_t  ui8_temp;
 
 void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
@@ -221,29 +234,35 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
                 }
                 ui16_hall_360_ref = ui16_b;
                 ui8_hall_360_ref_valid = 1;
-                ui8_motor_phase_absolute_angle = (uint8_t) PHASE_ROTOR_ANGLE_210;
-                ui16_hall_ref_cnt[3] = ui16_b - ui16_hall_60_ref_old;
+                ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[3]; // Rotor at 210 deg
+                ui8_hall_counter_offset = ui8_hall_counter_offset_down;
+                ui16_hall_calib_cnt[3] = ui16_b - ui16_hall_60_ref_old;
             } else
                 switch (ui8_temp) {
                     case 0x06:
-                        ui8_motor_phase_absolute_angle = (uint8_t) PHASE_ROTOR_ANGLE_30;
-                        ui16_hall_ref_cnt[0] = ui16_b - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[0]; // Rotor at 30 deg
+                        ui8_hall_counter_offset = ui8_hall_counter_offset_up;
+                        ui16_hall_calib_cnt[0] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     case 0x05:
-                        ui8_motor_phase_absolute_angle = (uint8_t) PHASE_ROTOR_ANGLE_270;
-                        ui16_hall_ref_cnt[4] = ui16_b - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[4]; // Rotor at 270 deg
+                        ui8_hall_counter_offset = ui8_hall_counter_offset_up;
+                        ui16_hall_calib_cnt[4] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     case 0x04:
-                        ui8_motor_phase_absolute_angle = (uint8_t) PHASE_ROTOR_ANGLE_330;
-                        ui16_hall_ref_cnt[5] = ui16_b - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[5]; // Rotor at 330 deg
+                        ui8_hall_counter_offset = ui8_hall_counter_offset_down;
+                        ui16_hall_calib_cnt[5] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     case 0x02:
-                        ui8_motor_phase_absolute_angle = (uint8_t) PHASE_ROTOR_ANGLE_90;
-                        ui16_hall_ref_cnt[1] = ui16_b - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[1]; // Rotor at 90 deg
+                        ui8_hall_counter_offset = ui8_hall_counter_offset_down;
+                        ui16_hall_calib_cnt[1] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     case 0x03:
-                        ui8_motor_phase_absolute_angle = (uint8_t) PHASE_ROTOR_ANGLE_150;
-                        ui16_hall_ref_cnt[2] = ui16_b - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[2]; // Rotor at 150 deg
+                        ui8_hall_counter_offset = ui8_hall_counter_offset_up;
+                        ui16_hall_calib_cnt[2] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     default:
                         return;
@@ -294,7 +313,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             } while (--ui8_cnt);
         }
         // we need to put phase voltage 90 degrees ahead of rotor position, to get current 90 degrees ahead and have max torque per amp
-        ui8_svm_table_index = ui8_temp + ui8_motor_phase_absolute_angle + ui8_g_foc_angle + ui8_rotor_angle_adj;
+        ui8_svm_table_index = ui8_temp + ui8_motor_phase_absolute_angle + ui8_g_foc_angle + ui8_phase_angle_adj;
         */
         #ifndef __CDT_PARSER__ // disable Eclipse syntax check
         __asm
@@ -303,7 +322,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             jreq 00011$
             // ui16_a = (ui16_a + ui8_fw_hall_counter_offset + HALL_COUNTER_FIXED_OFFSET) << 2;
             ld  a, _ui8_fw_hall_counter_offset+0
-            add a, #0x12
+            add a, _ui8_hall_counter_offset+0
             clrw    x
             ld  xl, a
             addw    x, _ui16_a+0
@@ -322,11 +341,11 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             jrne 00012$
             // _ui8_temp contains interpolation angle
         00011$: // BLOCK_COMMUTATION
-            // ui8_svm_table_index = ui8_temp + ui8_motor_phase_absolute_angle + ui8_g_foc_angle + ui8_rotor_angle_adj;
+            // ui8_svm_table_index = ui8_temp + ui8_motor_phase_absolute_angle + ui8_g_foc_angle + ui8_phase_angle_adj;
             ld  a, _ui8_temp+0
             add a, _ui8_motor_phase_absolute_angle+0
             add a, _ui8_g_foc_angle+0
-            add a, _ui8_rotor_angle_adj
+            add a, _ui8_phase_angle_adj
             ld _ui8_temp, a
         __endasm;
         #endif
@@ -340,219 +359,190 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
         // Max of SVM table is 202 and ui8_tmp goes from 0 to 100 (101*254/256) and
         // ui8_phase_x_voltage goes from 0 (MIDDLE_PWM_COUNTER - ui8_temp) to 200 (MIDDLE_PWM_COUNTER + ui8_temp)
 
-/*
-        ui8_cnt = ui8_svm_table[(uint8_t) (ui8_temp + 171)]; // +240deg
-        if (ui8_cnt > MIDDLE_SVM_TABLE) {
-            ui16_value = (uint16_t)((uint8_t)(ui8_cnt - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
-            ui16_phase_a_voltage = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t) (ui16_value >> 8)) << 1;
+        /*
+        // Phase A is advanced 240 degrees over phase B
+        ui8_temp = ui8_svm_table[(uint8_t) (ui8_svm_table_index + 171)]; // 240 deg
+        if (ui8_temp > MIDDLE_SVM_TABLE) {
+            ui16_a = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
+            ui16_a = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t) (ui16_a >> 8)) << 1;
         } else {
-            ui16_value = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_cnt) * (uint8_t)ui8_g_duty_cycle);
-            ui16_phase_a_voltage = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_value >> 8)) << 1;
+            ui16_a = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
+            ui16_a = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_a >> 8)) << 1;
         }
-
-        // phase B as reference phase
-        ui8_cnt = ui8_svm_table[ui8_temp];
-        if (ui8_cnt > MIDDLE_SVM_TABLE) {
-            ui16_value = (uint16_t) ((uint8_t)(ui8_cnt - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
-            ui16_phase_b_voltage = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t) (ui16_value >> 8)) << 1;
-        } else {
-            ui16_value = (uint16_t) ((uint8_t)(MIDDLE_SVM_TABLE - ui8_cnt) * (uint8_t)ui8_g_duty_cycle);
-            ui16_phase_b_voltage = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_value >> 8)) << 1;
-        }
-
-        // phase C is advanced 120 degrees over phase B
-        ui8_cnt = ui8_svm_table[(uint8_t) (ui8_temp + 85)]; // +120 deg
-        if (ui8_cnt > MIDDLE_SVM_TABLE) {
-            ui16_value = (uint16_t) ((uint8_t)(ui8_cnt - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
-            ui16_phase_c_voltage = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t) (ui16_value >> 8)) << 1;
-        } else {
-            ui16_value = (uint16_t) ((uint8_t)(MIDDLE_SVM_TABLE - ui8_cnt) * (uint8_t)ui8_g_duty_cycle);
-            ui16_phase_c_voltage = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_value >> 8)) << 1;
-        }
-*/
-            /*
-            ui8_temp = ui8_svm_table[(uint8_t) (ui8_svm_table_index + 171)]; // 240 deg
-            if (ui8_temp > MIDDLE_SVM_TABLE) {
-                ui16_a = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
-                ui16_a = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t) (ui16_a >> 8)) << 1;
-            } else {
-                ui16_a = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
-                ui16_a = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_a >> 8)) << 1;
-            }
-            */
-            #ifndef __CDT_PARSER__ // disable Eclipse syntax check
-            __asm
-                ld  a, _ui8_temp+0
-                add a, #0xab    // ui8_temp = ui8_svm_table[(uint8_t) (ui8_svm_table_index + 171)];
-                clrw x
-                ld  xl, a
-                ld  a, (_ui8_svm_table, x)
-                cp  a, #0x6a    // if (ui8_temp > MIDDLE_SVM_TABLE)
-                jrule   00020$
-                // ui16_a = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
-                sub a, #0x6a
-                ld  xl, a
-                ld  a, _ui8_g_duty_cycle+0
-                mul x, a
-                // ui16_a = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t) (ui16_a >> 8)) << 1;
-                ld  a, xh
-                clr _ui16_a+0
-                add a, #0x69
-                jrpl 00022$
-                mov _ui16_a+0, #0x01  // result is negative (bit 7 is set)
-            00022$:
-                sll a
-                ld  _ui16_a+1, a
-                jra 00021$
-            00020$:             // } else {
-                // ui16_a = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
-                ld  _ui16_a+1, a
-                ld  a, #0x6a
-                sub a, _ui16_a+1
-                ld  xl, a
-                ld  a, _ui8_g_duty_cycle+0
-                mul x, a
-                // ui16_a = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_a >> 8)) << 1;
-                ld  a, xh
-                ld  _ui16_a+1, a
-                ld  a, #0x69
-                clr _ui16_a+0
-                sub a, _ui16_a+1
-                jrpl 00023$
-                mov _ui16_a+0, #0x01
-            00023$:
-                sll a
-                ld  _ui16_a+1, a
-            00021$:
-            __endasm;
-            #endif
-
-            /*
-            // phase B as reference phase
-            ui8_temp = ui8_svm_table[ui8_svm_table_index];
-            if (ui8_temp > MIDDLE_SVM_TABLE) {
-                ui16_a = (uint16_t) ((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
-                ui16_b = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t) (ui16_a >> 8)) << 1;
-            } else {
-                ui16_a = (uint16_t) ((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
-                ui16_b = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t)(ui16_a >> 8)) << 1;
-            }
-            */
-            #ifndef __CDT_PARSER__ // disable Eclipse syntax check
-            __asm
-                ld a, _ui8_temp+0   // ui8_svm_table_index is stored in ui8_temp
-                clrw x              // ui8_temp = ui8_svm_table[ui8_svm_table_index];
-                ld  xl, a
-                ld  a, (_ui8_svm_table, x)
-                cp  a, #0x6a    // if (ui8_temp > MIDDLE_SVM_TABLE)
-                jrule   00024$
-                // ui16_a = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
-                sub a, #0x6a
-                ld  xl, a
-                ld  a, _ui8_g_duty_cycle+0
-                mul x, a
-                // ui16_b = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t)(ui16_a >> 8)) << 1;
-                ld  a, xh
-                clr _ui16_b+0
-                add a, #0x69
-                jrpl 00026$
-                mov _ui16_b+0, #0x01
-            00026$:
-                sll a
-                ld  _ui16_b+1, a
-                jra 00025$
-            00024$:             // } else {
-                // ui16_a = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
-                ld  _ui16_b+1, a
-                ld  a, #0x6a
-                sub a, _ui16_b+1
-                ld  xl, a
-                ld  a, _ui8_g_duty_cycle+0
-                mul x, a
-                // ui16_b = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_a >> 8)) << 1;
-                ld  a, xh
-                ld  _ui16_b+1, a
-                ld  a, #0x69
-                clr _ui16_b+0
-                sub a, _ui16_b+1
-                jrpl 00027$
-                mov _ui16_b+0, #0x01
-            00027$:
-                sll a
-                ld  _ui16_b+1, a
-            00025$:
-            __endasm;
-            #endif
-
-            /*
-            // phase C is advanced 120 degrees over phase B
-            ui8_temp = ui8_svm_table[(uint8_t) (ui8_svm_table_index + 85 )]; // 120 deg
-            if (ui8_temp > MIDDLE_SVM_TABLE) {
-                ui16_a = (uint16_t) ((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
-                ui16_c = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t) (ui16_a >> 8)) << 1;
-            } else {
-                ui16_a = (uint16_t) ((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
-                ui16_c = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_a >> 8)) << 1;
-            }
-            */
-            #ifndef __CDT_PARSER__ // disable Eclipse syntax check
-            __asm
-                ld a, _ui8_temp+0     // ui8_svm_table_index is stored in ui8_temp
-                add a, #0x55        // ui8_temp = ui8_svm_table[(uint8_t) (ui8_svm_table_index + 85 /* 120º */)];
-                clrw x
-                ld  xl, a
-                ld  a, (_ui8_svm_table, x)
-                cp  a, #0x6a    // if (ui8_temp > MIDDLE_SVM_TABLE)
-                jrule   00028$
-                // ui16_a = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
-                sub a, #0x6a
-                ld  xl, a
-                ld  a, _ui8_g_duty_cycle+0
-                mul x, a
-                // ui16_c = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t)(ui16_a >> 8)) << 1;
-                ld  a, xh
-                clr _ui16_c+0
-                add a, #0x69
-                jrpl 00030$
-                mov _ui16_c+0, #0x01
-            00030$:
-                sll a
-                ld  _ui16_c+1, a
-                jra 00029$
-            00028$:             // } else {
-                // ui16_a = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
-                ld  _ui16_c+1, a
-                ld  a, #0x6a
-                sub a, _ui16_c+1
-                ld  xl, a
-                ld  a, _ui8_g_duty_cycle+0
-                mul x, a
-                // ui16_c = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_a >> 8)) << 1;
-                ld  a, xh
-                ld  _ui16_c+1, a
-                ld  a, #0x69
-                clr _ui16_c+0
-                sub a, _ui16_c+1
-                jrpl 00031$
-                mov _ui16_c+0, #0x01
-            00031$:
-                sll a
-                ld  _ui16_c+1, a
-            00029$:
-            __endasm;
-            #endif
-
-        #ifdef PWM_TIME_DEBUG
-            #ifndef __CDT_PARSER__ // avoid Eclipse syntax check
-            __asm
-                ld  a, 0x5250
-                and a, #0x10 // counter direction end irq
-                or  a, 0x525e // TIM1->CNTRH
-                ld  _ui16_pwm_cnt_down_irq+0, a      // ui16_pwm_cnt_down_irq MSB = TIM1->CNTRH | direction
-                mov _ui16_pwm_cnt_down_irq+1, 0x525f // ui16_pwm_cnt_down_irq LSB = TIM1->CNTRL
-            __endasm;
-            #endif
+        */
+        #ifndef __CDT_PARSER__ // disable Eclipse syntax check
+        __asm
+            ld  a, _ui8_temp+0
+            add a, #0xab    // ui8_temp = ui8_svm_table[(uint8_t) (ui8_svm_table_index + 171)];
+            clrw x
+            ld  xl, a
+            ld  a, (_ui8_svm_table, x)
+            cp  a, #0x6a    // if (ui8_temp > MIDDLE_SVM_TABLE)
+            jrule   00020$
+            // ui16_a = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
+            sub a, #0x6a
+            ld  xl, a
+            ld  a, _ui8_g_duty_cycle+0
+            mul x, a
+            // ui16_a = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t) (ui16_a >> 8)) << 1;
+            ld  a, xh
+            clr _ui16_a+0
+            add a, #0x69
+            jrpl 00022$
+            mov _ui16_a+0, #0x01  // result is negative (bit 7 is set)
+        00022$:
+            sll a
+            ld  _ui16_a+1, a
+            jra 00021$
+        00020$:             // } else {
+            // ui16_a = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
+            ld  _ui16_a+1, a
+            ld  a, #0x6a
+            sub a, _ui16_a+1
+            ld  xl, a
+            ld  a, _ui8_g_duty_cycle+0
+            mul x, a
+            // ui16_a = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_a >> 8)) << 1;
+            ld  a, xh
+            ld  _ui16_a+1, a
+            ld  a, #0x69
+            clr _ui16_a+0
+            sub a, _ui16_a+1
+            jrpl 00023$
+            mov _ui16_a+0, #0x01
+        00023$:
+            sll a
+            ld  _ui16_a+1, a
+        00021$:
+        __endasm;
         #endif
+
+        /*
+        // phase B as reference phase
+        ui8_temp = ui8_svm_table[ui8_svm_table_index];
+        if (ui8_temp > MIDDLE_SVM_TABLE) {
+            ui16_b = (uint16_t) ((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
+            ui16_b = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t) (ui16_b >> 8)) << 1;
+        } else {
+            ui16_b = (uint16_t) ((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
+            ui16_b = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t)(ui16_b >> 8)) << 1;
+        }
+        */
+        #ifndef __CDT_PARSER__ // disable Eclipse syntax check
+        __asm
+            ld a, _ui8_temp+0   // ui8_svm_table_index is stored in ui8_temp
+            clrw x              // ui8_temp = ui8_svm_table[ui8_svm_table_index];
+            ld  xl, a
+            ld  a, (_ui8_svm_table, x)
+            cp  a, #0x6a    // if (ui8_temp > MIDDLE_SVM_TABLE)
+            jrule   00024$
+            // ui16_b = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
+            sub a, #0x6a
+            ld  xl, a
+            ld  a, _ui8_g_duty_cycle+0
+            mul x, a
+            // ui16_b = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t)(ui16_b >> 8)) << 1;
+            ld  a, xh
+            clr _ui16_b+0
+            add a, #0x69
+            jrpl 00026$
+            mov _ui16_b+0, #0x01
+        00026$:
+            sll a
+            ld  _ui16_b+1, a
+            jra 00025$
+        00024$:             // } else {
+            // ui16_b = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
+            ld  _ui16_b+1, a
+            ld  a, #0x6a
+            sub a, _ui16_b+1
+            ld  xl, a
+            ld  a, _ui8_g_duty_cycle+0
+            mul x, a
+            // ui16_b = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_b >> 8)) << 1;
+            ld  a, xh
+            ld  _ui16_b+1, a
+            ld  a, #0x69
+            clr _ui16_b+0
+            sub a, _ui16_b+1
+            jrpl 00027$
+            mov _ui16_b+0, #0x01
+        00027$:
+            sll a
+            ld  _ui16_b+1, a
+        00025$:
+        __endasm;
+        #endif
+
+        /*
+        // phase C is advanced 120 degrees over phase B
+        ui8_temp = ui8_svm_table[(uint8_t) (ui8_svm_table_index + 85 )]; // 120 deg
+        if (ui8_temp > MIDDLE_SVM_TABLE) {
+            ui16_c = (uint16_t) ((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
+            ui16_c = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t) (ui16_c >> 8)) << 1;
+        } else {
+            ui16_c = (uint16_t) ((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
+            ui16_c = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_c >> 8)) << 1;
+        }
+        */
+        #ifndef __CDT_PARSER__ // disable Eclipse syntax check
+        __asm
+            ld a, _ui8_temp+0     // ui8_svm_table_index is stored in ui8_temp
+            add a, #0x55        // ui8_temp = ui8_svm_table[(uint8_t) (ui8_svm_table_index + 85 /* 120º */)];
+            clrw x
+            ld  xl, a
+            ld  a, (_ui8_svm_table, x)
+            cp  a, #0x6a    // if (ui8_temp > MIDDLE_SVM_TABLE)
+            jrule   00028$
+            // ui16_c = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
+            sub a, #0x6a
+            ld  xl, a
+            ld  a, _ui8_g_duty_cycle+0
+            mul x, a
+            // ui16_c = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t)(ui16_c >> 8)) << 1;
+            ld  a, xh
+            clr _ui16_c+0
+            add a, #0x69
+            jrpl 00030$
+            mov _ui16_c+0, #0x01
+        00030$:
+            sll a
+            ld  _ui16_c+1, a
+            jra 00029$
+        00028$:             // } else {
+            // ui16_c = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
+            ld  _ui16_c+1, a
+            ld  a, #0x6a
+            sub a, _ui16_c+1
+            ld  xl, a
+            ld  a, _ui8_g_duty_cycle+0
+            mul x, a
+            // ui16_c = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_c >> 8)) << 1;
+            ld  a, xh
+            ld  _ui16_c+1, a
+            ld  a, #0x69
+            clr _ui16_c+0
+            sub a, _ui16_c+1
+            jrpl 00031$
+            mov _ui16_c+0, #0x01
+        00031$:
+            sll a
+            ld  _ui16_c+1, a
+        00029$:
+        __endasm;
+        #endif
+
+    #ifdef PWM_TIME_DEBUG
+        #ifndef __CDT_PARSER__ // avoid Eclipse syntax check
+        __asm
+            ld  a, 0x5250
+            and a, #0x10 // counter direction end irq
+            or  a, 0x525e // TIM1->CNTRH
+            ld  _ui16_pwm_cnt_down_irq+0, a      // ui16_pwm_cnt_down_irq MSB = TIM1->CNTRH | direction
+            mov _ui16_pwm_cnt_down_irq+1, 0x525f // ui16_pwm_cnt_down_irq LSB = TIM1->CNTRL
+        __endasm;
+        #endif
+    #endif
 
     } else {
         // CRITICAL SECTION !
@@ -791,7 +781,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
                 goto skip_cadence;
             }
 
-            ui16_cadence_sensor_ticks_counter_min = ui16_cadence_sensor_ticks_counter_min_speed_adjusted;
+            ui16_cadence_sensor_ticks_counter_min = ui16_cadence_ticks_count_min_speed_adj;
 
             // Reference state for crank revolution counter increment
             if (ui8_temp == 0)

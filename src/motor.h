@@ -27,8 +27,12 @@ extern volatile uint8_t ui8_fw_hall_counter_offset;
 extern volatile uint16_t ui16_hall_counter_total;
 extern volatile uint8_t ui8_controller_duty_cycle_target;
 extern volatile uint8_t ui8_g_foc_angle;
-extern volatile uint8_t ui8_rotor_angle_adj;
-extern volatile uint16_t ui16_hall_ref_cnt[6];
+extern volatile uint8_t ui8_phase_angle_adj;
+extern volatile uint16_t ui16_hall_calib_cnt[6];
+extern volatile uint8_t ui8_hall_ref_angles[6];
+extern volatile uint8_t ui8_hall_counter_offset_down;
+extern volatile uint8_t ui8_hall_counter_offset_up;
+
 
 // motor erps
 extern volatile uint16_t ui16_motor_speed_erps;

@@ -13,7 +13,7 @@
 #include "main.h"
 
 // cadence sensor
-extern uint16_t ui16_cadence_sensor_ticks_counter_min_speed_adjusted;
+extern uint16_t ui16_cadence_ticks_count_min_speed_adj;
 
 // Torque sensor coaster brake engaged threshold value
 extern uint8_t ui8_adc_coaster_brake_threshold;

@@ -15,6 +15,23 @@
 
 #define FW_VERSION 10
 
+/*---------------------------------------------------------
+ NOTE: regarding motor rotor offset
+
+ The motor rotor offset should be as close to 0 as
+ possible. You can try to tune with the wheel in the air,
+ full throttle and look at the batttery current. Adjust
+ for the lowest battery current possible.
+ ---------------------------------------------------------*/
+#define MOTOR_ROTOR_OFFSET_ANGLE  (uint8_t)10
+#define PHASE_ROTOR_ANGLE_30  (uint8_t)((uint8_t)21  + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
+#define PHASE_ROTOR_ANGLE_90  (uint8_t)((uint8_t)64  + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
+#define PHASE_ROTOR_ANGLE_150 (uint8_t)((uint8_t)107 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
+#define PHASE_ROTOR_ANGLE_210 (uint8_t)((uint8_t)149 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
+#define PHASE_ROTOR_ANGLE_270 (uint8_t)((uint8_t)192 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
+#define PHASE_ROTOR_ANGLE_330 (uint8_t)((uint8_t)235 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
+
+
 // PWM related values
 // motor
 #define PWM_CYCLES_SECOND                                       19047U // 52us (PWM period)
@@ -39,13 +56,6 @@
 #define WHEEL_SPEED_SENSOR_TICKS_COUNTER_MAX                    165   // (135 at 15,625KHz) something like 200 m/h with a 6'' wheel
 #define WHEEL_SPEED_SENSOR_TICKS_COUNTER_MIN                    39976 // could be a bigger number but will make for a slow detection of stopped wheel speed
 
-
-#define PWM_DUTY_CYCLE_MAX                                        254
-#define MIDDLE_SVM_TABLE                                          106
-#define MIDDLE_PWM_COUNTER                                        105
-#define HALL_COUNTER_FIXED_OFFSET                                 18  // 18*4=72us (20us delay compensation + 52us offset)
-#define FW_HALL_COUNTER_OFFSET_MAX                                8
-
 /*---------------------------------------------------------
  NOTE: regarding duty cycle (PWM) ramping
 
@@ -56,22 +66,34 @@
  low values for acceleration.
  ---------------------------------------------------------*/
 
-#define MOTOR_ROTOR_OFFSET_ANGLE                    (uint8_t)10
-#define PHASE_ROTOR_ANGLE_90                        (uint8_t)((uint8_t)64  + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
-#define PHASE_ROTOR_ANGLE_150                       (uint8_t)((uint8_t)107 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
-#define PHASE_ROTOR_ANGLE_210                       (uint8_t)((uint8_t)149 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
-#define PHASE_ROTOR_ANGLE_270                       (uint8_t)((uint8_t)192 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
-#define PHASE_ROTOR_ANGLE_330                       (uint8_t)((uint8_t)235 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
-#define PHASE_ROTOR_ANGLE_30                        (uint8_t)((uint8_t)21  + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
 
-/*---------------------------------------------------------
- NOTE: regarding motor rotor offset
+#define PWM_DUTY_CYCLE_MAX                                        254
+#define MIDDLE_SVM_TABLE                                          106
+#define MIDDLE_PWM_COUNTER                                        105
 
- The motor rotor offset should be as close to 0 as
- possible. You can try to tune with the wheel in the air,
- full throttle and look at the batttery current. Adjust
- for the lowest battery current possible.
- ---------------------------------------------------------*/
+
+/* Hall Sensors NOTE! - results after Hall sensor calibration experiment
+Dai calcoli risulta che Trise - Tfall = 20 e cioè 80 us (1 Hall counter step e' 4us).
+Quindi Trise è molto più lungo di Tfall. Quindi le transizioni del sensore Hall vengono rilevate
+con un ritardo diverso in funzione del fronte del segnale. Quindi gli stati 6,3,5 (fronte di
+salita) vengono rilevati con un ritardo di 80us (o 20 step) maggiore rispetto agli stati 2,1,4.
+Quindi negli stati 6,3 e 5, al contatore Hall usato per l'interpolazione, va sommato 20
+(20x4us=80us) visto che è partito con 80us di ritardo rispetto agli altri stati. In questo modo
+il contatore Hall sarà allineato allo stesso modo per tutti gli stati ma sarà comunque in ritardo
+di Tfall per tutti gli stati. Questo ritardo fisso viene gestito con un offset fisso da sommare
+al contatore. Questo spiega la necessità dell'offset fisso che si è reso necessario fino ad ora.
+Visto che il valore attuale dell'offset fisso è 18, si deve sommare 28 (20+8) agli stati 6,3,5
+e 8 agli stati 2,1,4 poichè (28+8)/2=18. Di questo 8 (8x4=32us), 6,5 (6,56*4=26,25us) servono a
+compensare il ritardo fisso fra la lettura del contatore Hall e l'applicazione delle fasi che
+avviene con un ritardo fisso pari a mezzo ciclo PWM (1/19047 = 52,5us, 52,5/2=26,25us). Da questo
+si deduce che Tfall dovrebbe essere circa (8-6,5)x4us=6us. Sempre ammettendo che l'offset fisso
+di 18 attuale da cui siamo partiti sia valido. Purtroppo non c'è modo di calcolare i valori
+assoluti di Trise e Tfall rilevando solo il segnale Hall ma solo la differenza fra i due valori.
+*/
+#define HALL_COUNTER_OFFSET_UP  	                              28
+#define HALL_COUNTER_OFFSET_DOWN                                  8
+#define FW_HALL_COUNTER_OFFSET_MAX                                8
+
 
 #define MOTOR_ROTOR_INTERPOLATION_MIN_ERPS     10
 

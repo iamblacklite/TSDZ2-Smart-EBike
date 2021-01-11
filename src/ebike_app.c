@@ -14,6 +14,7 @@
 #include "main.h"
 #include "interrupts.h"
 #include "adc.h"
+#include "main.h"
 #include "motor.h"
 #include "pwm.h"
 #include "uart.h"
@@ -53,7 +54,7 @@ static uint8_t ui8_adc_battery_current_target = 0;
 static uint8_t ui8_duty_cycle_target = 0;
 
 // cadence sensor
-uint16_t ui16_cadence_sensor_ticks_counter_min_speed_adjusted = CADENCE_SENSOR_CALC_COUNTER_MIN;
+uint16_t ui16_cadence_ticks_count_min_speed_adj = CADENCE_SENSOR_CALC_COUNTER_MIN;
 static uint8_t ui8_pedal_cadence_RPM = 0;
 
 // torque sensor
@@ -299,7 +300,7 @@ static const uint8_t ui8_eMTB_power_function_255[eMTB_POWER_FUNCTION_ARRAY_SIZE]
 static uint8_t ui8_cruise_PID_initialize = 1;
 
 // UART
-#define UART_NUMBER_DATA_BYTES_TO_RECEIVE   10  // change this value depending on how many data bytes there are to receive ( Package = one start byte + data bytes + two bytes 16 bit CRC )
+#define UART_NUMBER_DATA_BYTES_TO_RECEIVE   13  // change this value depending on how many data bytes there are to receive ( Package = one start byte + data bytes + two bytes 16 bit CRC )
 #define UART_NUMBER_DATA_BYTES_TO_SEND      29  // change this value depending on how many data bytes there are to send ( Package = one start byte + data bytes + two bytes 16 bit CRC )
 
 volatile uint8_t ui8_received_package_flag = 0;
@@ -990,7 +991,7 @@ static void calc_cadence(void) {
     uint16_t ui16_cadence_sensor_ticks_temp = ui16_cadence_sensor_ticks;
 
     // adjust cadence sensor ticks counter min depending on wheel speed
-    ui16_cadence_sensor_ticks_counter_min_speed_adjusted = map_ui16(ui16_wheel_speed_x10,
+    ui16_cadence_ticks_count_min_speed_adj = map_ui16(ui16_wheel_speed_x10,
             40,
             400,
             CADENCE_SENSOR_CALC_COUNTER_MIN,
@@ -1177,14 +1178,11 @@ void ebike_control_lights(void) {
     // select lights configuration
     switch (ui8_lights_configuration) {
     case 0:
-
         // set lights
         lights_set_state(ui8_lights_state);
-
         break;
 
     case 1:
-
         // check lights state
         if (ui8_lights_state) {
             // set lights
@@ -1193,11 +1191,9 @@ void ebike_control_lights(void) {
             // set lights
             lights_set_state(ui8_lights_state);
         }
-
         break;
 
     case 2:
-
         // check light and brake state
         if (ui8_lights_state && ui8_brake_state) {
             // set lights
@@ -1206,11 +1202,9 @@ void ebike_control_lights(void) {
             // set lights
             lights_set_state(ui8_lights_state);
         }
-
         break;
 
     case 3:
-
         // check light and brake state
         if (ui8_lights_state && ui8_brake_state) {
             // set lights
@@ -1222,11 +1216,9 @@ void ebike_control_lights(void) {
             // set lights
             lights_set_state(ui8_lights_state);
         }
-
         break;
 
     case 4:
-
         // check light and brake state
         if (ui8_lights_state && ui8_brake_state) {
             // set lights
@@ -1238,11 +1230,9 @@ void ebike_control_lights(void) {
             // set lights
             lights_set_state(ui8_lights_state);
         }
-
         break;
 
     case 5:
-
         // check brake state
         if (ui8_brake_state) {
             // set lights
@@ -1251,11 +1241,9 @@ void ebike_control_lights(void) {
             // set lights
             lights_set_state(ui8_lights_state);
         }
-
         break;
 
     case 6:
-
         // check brake state
         if (ui8_brake_state) {
             // set lights
@@ -1264,11 +1252,9 @@ void ebike_control_lights(void) {
             // set lights
             lights_set_state(ui8_lights_state);
         }
-
         break;
 
     case 7:
-
         // check brake state
         if (ui8_brake_state) {
             // set lights
@@ -1280,11 +1266,9 @@ void ebike_control_lights(void) {
             // set lights
             lights_set_state(ui8_lights_state);
         }
-
         break;
 
     case 8:
-
         // check brake state
         if (ui8_brake_state) {
             // set lights
@@ -1296,14 +1280,11 @@ void ebike_control_lights(void) {
             // set lights
             lights_set_state(ui8_lights_state);
         }
-
         break;
 
     default:
-
         // set lights
         lights_set_state(ui8_lights_state);
-
         break;
     }
 
@@ -1410,35 +1391,59 @@ static void uart_receive_package(void) {
 
             switch (ui8_message_ID) {
             case 0:
+            	// battery low voltage cut off x10
+				m_configuration_variables.ui16_battery_low_voltage_cut_off_x10 = (((uint16_t) ui8_rx_buffer[6]) << 8) + ((uint16_t) ui8_rx_buffer[5]);
+				// set low voltage cutoff (8 bit)
+				ui8_adc_battery_voltage_cut_off = (m_configuration_variables.ui16_battery_low_voltage_cut_off_x10 * 25U) / BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X1000;
 
-                // battery low voltage cut off x10
-                m_configuration_variables.ui16_battery_low_voltage_cut_off_x10 = (((uint16_t) ui8_rx_buffer[6]) << 8)
-                        + ((uint16_t) ui8_rx_buffer[5]);
+                // max battery current
+                ui8_battery_current_max = ui8_rx_buffer[7];
 
-                // set low voltage cutoff (8 bit)
-                ui8_adc_battery_voltage_cut_off = (m_configuration_variables.ui16_battery_low_voltage_cut_off_x10 * 25U)
-                                / BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X1000;
-
-                // wheel max speed
-                m_configuration_variables.ui8_wheel_speed_max = ui8_rx_buffer[7];
-
-                break;
-
-            case 1:
-
-                // wheel perimeter
-                m_configuration_variables.ui16_wheel_perimeter = (((uint16_t) ui8_rx_buffer[6]) << 8)
-                        + ((uint16_t) ui8_rx_buffer[5]);
-
-                // motor temperature limit function or throttle
-                m_configuration_variables.ui8_optional_ADC_function = ui8_rx_buffer[7];
-
-                break;
-
-            case 2:
+                // battery power limit
+                m_configuration_variables.ui8_target_battery_max_power_div25 = ui8_rx_buffer[8];
+                // calculate max battery current in ADC steps from the received battery current limit
+                uint8_t ui8_adc_battery_current_max_temp_1 = (uint16_t)(ui8_battery_current_max * (uint8_t)100) / (uint16_t)BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X100;
+                // calculate max battery current in ADC steps from the received power limit
+                uint32_t ui32_battery_current_max_x100 = ((uint32_t) m_configuration_variables.ui8_target_battery_max_power_div25 * 2500000) / ui16_battery_voltage_filtered_x1000;
+                uint8_t ui8_adc_battery_current_max_temp_2 = ui32_battery_current_max_x100 / BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X100;
+                // set max battery current
+                ui8_adc_battery_current_max = ui8_min(ui8_adc_battery_current_max_temp_1, ui8_adc_battery_current_max_temp_2);
 
                 // type of motor (36 volt, 48 volt or some experimental type)
-                m_configuration_variables.ui8_motor_inductance_x1048576 = ui8_rx_buffer[5];
+                m_configuration_variables.ui8_motor_inductance_x1048576 = ui8_rx_buffer[9];
+
+                // motor acceleration adjustment
+                uint8_t ui8_motor_acceleration_adjustment = ui8_rx_buffer[10];
+                // set duty cycle ramp up inverse step
+                ui8_duty_cycle_ramp_up_inverse_step_default = map_ui8((uint8_t)ui8_motor_acceleration_adjustment,
+                        (uint8_t) 0,
+                        (uint8_t) 100,
+                        (uint8_t) PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_DEFAULT,
+                        (uint8_t) PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN);
+				break;
+
+            case 1:
+            	// Phase offset angle adjust (normally 0; value changes during motor calibration)
+            	ui8_phase_angle_adj = ui8_rx_buffer[5];
+
+                // wheel perimeter
+                m_configuration_variables.ui16_wheel_perimeter = (((uint16_t) ui8_rx_buffer[7]) << 8) + ((uint16_t) ui8_rx_buffer[6]);
+
+                // wheel max speed
+                m_configuration_variables.ui8_wheel_speed_max = ui8_rx_buffer[8];
+
+                // assist without pedal rotation threshold
+                ui8_assist_without_pedal_rotation_threshold = ui8_rx_buffer[9];
+                // check if assist without pedal rotation threshold is valid (safety)
+                if (ui8_assist_without_pedal_rotation_threshold > 100) ui8_assist_without_pedal_rotation_threshold = 0;
+
+                // lights configuration
+                ui8_lights_configuration = ui8_rx_buffer[10];
+            	break;
+
+            case 2:
+                // motor temperature limit function or throttle (bit 0-6 of ui8_rx_buffer[5])
+                m_configuration_variables.ui8_optional_ADC_function = ui8_rx_buffer[5];
 
                 // motor over temperature min value limit
                 ui8_motor_temperature_min_value_to_limit = ui8_rx_buffer[6];
@@ -1446,81 +1451,56 @@ static void uart_receive_package(void) {
                 // motor over temperature max value limit
                 ui8_motor_temperature_max_value_to_limit = ui8_rx_buffer[7];
 
+                // Torque ADC offset fix. Enabled if MSB (bit 7 of ui8_rx_buffer[9]) is set
+				if (ui8_rx_buffer[9] & 0x80) {
+					ui16_adc_pedal_torque_offset = (((uint16_t)(ui8_rx_buffer[9] & 0x7f)) << 8) + ((uint16_t) ui8_rx_buffer[8]);
+
+					if (ui16_adc_pedal_torque_offset > COASTER_BRAKE_TORQUE_THRESHOLD)
+						if ((ui16_adc_pedal_torque_offset % 4) < 3)
+							ui8_adc_coaster_brake_threshold = (ui16_adc_pedal_torque_offset >> 2) - (COASTER_BRAKE_TORQUE_THRESHOLD >> 2);
+						else
+							ui8_adc_coaster_brake_threshold = (ui16_adc_pedal_torque_offset >> 2) - ((COASTER_BRAKE_TORQUE_THRESHOLD >> 2) - 1);
+					else
+						ui8_adc_coaster_brake_threshold = 0;
+				}
+
+                // pedal torque conversion
+                m_configuration_variables.ui8_pedal_torque_per_10_bit_ADC_step_x100 = ui8_rx_buffer[10];
                 break;
 
             case 3:
-                // Torque ADC offset fix
-                if (ui8_rx_buffer[5] != 0) {
-                    ui16_adc_pedal_torque_offset = (((uint16_t) ui8_rx_buffer[7]) << 8) + ((uint16_t) ui8_rx_buffer[6]);
-
-                    if (ui16_adc_pedal_torque_offset > COASTER_BRAKE_TORQUE_THRESHOLD)
-                        if ((ui16_adc_pedal_torque_offset % 4) < 3)
-                            ui8_adc_coaster_brake_threshold = (ui16_adc_pedal_torque_offset >> 2) - (COASTER_BRAKE_TORQUE_THRESHOLD >> 2);
-                        else
-                            ui8_adc_coaster_brake_threshold = (ui16_adc_pedal_torque_offset >> 2) - ((COASTER_BRAKE_TORQUE_THRESHOLD >> 2) - 1);
-                    else
-                        ui8_adc_coaster_brake_threshold = 0;
-                }
-                break;
+				// Phase Hall angle references calculated during Hall calibration
+				// When Hall is not calibrated all values are 0 and the default motor values are used
+            	if (ui8_rx_buffer[5] != 0) {
+					ui8_hall_ref_angles[0] = ui8_rx_buffer[5];
+					ui8_hall_ref_angles[1] = ui8_rx_buffer[6];
+					ui8_hall_ref_angles[2] = ui8_rx_buffer[7];
+					ui8_hall_ref_angles[3] = ui8_rx_buffer[8];
+					ui8_hall_ref_angles[4] = ui8_rx_buffer[9];
+					ui8_hall_ref_angles[5] = ui8_rx_buffer[10];
+				} else {
+					ui8_hall_ref_angles[0] = PHASE_ROTOR_ANGLE_30;
+					ui8_hall_ref_angles[1] = PHASE_ROTOR_ANGLE_90;
+					ui8_hall_ref_angles[2] = PHASE_ROTOR_ANGLE_150;
+					ui8_hall_ref_angles[3] = PHASE_ROTOR_ANGLE_210;
+					ui8_hall_ref_angles[4] = PHASE_ROTOR_ANGLE_270;
+					ui8_hall_ref_angles[5] = PHASE_ROTOR_ANGLE_330;
+				}
+            	break;
 
             case 4:
-
-                // lights configuration
-                ui8_lights_configuration = ui8_rx_buffer[5];
-
-                // assist without pedal rotation threshold
-                ui8_assist_without_pedal_rotation_threshold = ui8_rx_buffer[6];
-
-                // check if assist without pedal rotation threshold is valid (safety)
-                if (ui8_assist_without_pedal_rotation_threshold > 100) {
-                    ui8_assist_without_pedal_rotation_threshold = 0;
-                }
-
-                // motor acceleration adjustment
-                uint8_t ui8_motor_acceleration_adjustment = ui8_rx_buffer[7];
-
-                // set duty cycle ramp up inverse step
-                ui8_duty_cycle_ramp_up_inverse_step_default = map_ui8((uint8_t)ui8_motor_acceleration_adjustment,
-                        (uint8_t) 0,
-                        (uint8_t) 100,
-                        (uint8_t) PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_DEFAULT,
-                        (uint8_t) PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN);
-                break;
-
-            case 5:
-
-                // pedal torque conversion
-                m_configuration_variables.ui8_pedal_torque_per_10_bit_ADC_step_x100 = ui8_rx_buffer[5];
-
-                // max battery current
-                ui8_battery_current_max = ui8_rx_buffer[6];
-
-                // battery power limit
-                m_configuration_variables.ui8_target_battery_max_power_div25 = ui8_rx_buffer[7];
-
-                // calculate max battery current in ADC steps from the received battery current limit
-                uint8_t ui8_adc_battery_current_max_temp_1 = (uint16_t)(ui8_battery_current_max * (uint8_t)100)
-                        / (uint16_t)BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X100;
-
-                // calculate max battery current in ADC steps from the received power limit
-                uint32_t ui32_battery_current_max_x100 = ((uint32_t) m_configuration_variables.ui8_target_battery_max_power_div25 * 2500000)
-                        / ui16_battery_voltage_filtered_x1000;
-                uint8_t ui8_adc_battery_current_max_temp_2 = ui32_battery_current_max_x100 / BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X100;
-
-                // set max battery current
-                ui8_adc_battery_current_max = ui8_min(ui8_adc_battery_current_max_temp_1, ui8_adc_battery_current_max_temp_2);
-                break;
-
-            case 6:
-                ui8_rotor_angle_adj = ui8_rx_buffer[5];
-                break;
-
-            default:
-                // nothing, should display error code
-                break;
+            	// Hall counter offset for angle interpolation calculated during Hall calibration
+				// When Hall is not calibrated the values are 0 and the default values are used
+            	if (ui8_rx_buffer[5] != 0) {
+            		ui8_hall_counter_offset_up = ui8_rx_buffer[5];
+            		ui8_hall_counter_offset_down = ui8_rx_buffer[6];
+				} else {
+					ui8_hall_counter_offset_up = HALL_COUNTER_OFFSET_UP;
+					ui8_hall_counter_offset_down = HALL_COUNTER_OFFSET_DOWN;
+			}
+            	break;
             }
         }
-
         // signal that we processed the full package
         ui8_received_package_flag = 0;
 
@@ -1608,22 +1588,22 @@ static void uart_send_package(void) {
     #endif
 
     if (ui8_riding_mode == MOTOR_CALIBRATION_MODE) {
-        ui16_temp = ui16_hall_ref_cnt[0];
+        ui16_temp = ui16_hall_calib_cnt[0];
         ui8_tx_buffer[10] = (uint8_t) (ui16_temp & 0xff);
         ui8_tx_buffer[11] = (uint8_t) (ui16_temp >> 8);
-        ui16_temp = ui16_hall_ref_cnt[1];
+        ui16_temp = ui16_hall_calib_cnt[1];
         ui8_tx_buffer[12] = (uint8_t) (ui16_temp & 0xff);
         ui8_tx_buffer[13] = (uint8_t) (ui16_temp >> 8);
-        ui16_temp = ui16_hall_ref_cnt[2];
+        ui16_temp = ui16_hall_calib_cnt[2];
         ui8_tx_buffer[14] = (uint8_t) (ui16_temp & 0xff);
         ui8_tx_buffer[15] = (uint8_t) (ui16_temp >> 8);
-        ui16_temp = ui16_hall_ref_cnt[3];
+        ui16_temp = ui16_hall_calib_cnt[3];
         ui8_tx_buffer[16] = (uint8_t) (ui16_temp & 0xff);
         ui8_tx_buffer[17] = (uint8_t) (ui16_temp >> 8);
-        ui16_temp = ui16_hall_ref_cnt[4];
+        ui16_temp = ui16_hall_calib_cnt[4];
         ui8_tx_buffer[18] = (uint8_t) (ui16_temp & 0xff);
         ui8_tx_buffer[19] = (uint8_t) (ui16_temp >> 8);
-        ui16_temp = ui16_hall_ref_cnt[5];
+        ui16_temp = ui16_hall_calib_cnt[5];
         ui8_tx_buffer[20] = (uint8_t) (ui16_temp & 0xff);
         ui8_tx_buffer[21] = (uint8_t) (ui16_temp >> 8);
     } else {
