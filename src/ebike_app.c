@@ -311,7 +311,6 @@ volatile uint8_t ui8_tx_buffer[UART_NUMBER_DATA_BYTES_TO_SEND];
 volatile uint8_t ui8_tx_counter = UART_NUMBER_DATA_BYTES_TO_SEND + 1;
 volatile uint8_t ui8_byte_received;
 volatile uint8_t ui8_state_machine = 0;
-volatile uint8_t ui8_message_ID = 0;
 
 static void communications_controller(void);
 static void uart_receive_package(void);
@@ -1377,9 +1376,6 @@ static void uart_receive_package(void) {
             // Reset the safety counter
             no_rx_counter = 0;
 
-            // message ID
-            ui8_message_ID = ui8_rx_buffer[1];
-
             // riding mode
             ui8_riding_mode = ui8_rx_buffer[2];
 
@@ -1389,7 +1385,8 @@ static void uart_receive_package(void) {
             // lights state
             ui8_lights_state = ui8_rx_buffer[4];
 
-            switch (ui8_message_ID) {
+            // message ID
+            switch (ui8_rx_buffer[1]) {
             case 0:
             	// battery low voltage cut off x10
 				m_configuration_variables.ui16_battery_low_voltage_cut_off_x10 = (((uint16_t) ui8_rx_buffer[6]) << 8) + ((uint16_t) ui8_rx_buffer[5]);
@@ -1424,7 +1421,11 @@ static void uart_receive_package(void) {
 
             case 1:
             	// Phase offset angle adjust (normally 0; value changes during motor calibration)
-            	ui8_phase_angle_adj = ui8_rx_buffer[5];
+            	// Limit value to +/-10
+            	if ((ui8_rx_buffer[5] < 11) || (ui8_rx_buffer[5] > 245))
+            		ui8_phase_angle_adj = ui8_rx_buffer[5];
+            	else
+            		ui8_phase_angle_adj = 0;
 
                 // wheel perimeter
                 m_configuration_variables.ui16_wheel_perimeter = (((uint16_t) ui8_rx_buffer[7]) << 8) + ((uint16_t) ui8_rx_buffer[6]);
@@ -1561,10 +1562,21 @@ static void uart_send_package(void) {
     // battery current filtered x10
     ui8_tx_buffer[3] = ui8_battery_current_filtered_x10;
 
-    // wheel speed x10
+    // Wheel Speed
+    // bit 0..11; speedx10 (Km/h)
+    // bit 12: free for future use
+    // bit 13: free for future use
+    // bit 14: flag for MAIN_TIME_DEBUG present
+    // bit 15: flag for PWM_TIME_DEBUG present
     ui16_temp = ui16_wheel_speed_x10;
     ui8_tx_buffer[4] = (uint8_t) (ui16_temp & 0xff);
-    ui8_tx_buffer[5] = (uint8_t) (ui16_temp >> 8);
+    ui8_tx_buffer[5] = (uint8_t) ((ui16_temp >> 8) & 0x0f);
+    #ifdef PWM_TIME_DEBUG
+        ui8_tx_buffer[5] |= 0x80;
+    #endif
+    #ifdef MAIN_TIME_DEBUG
+        ui8_tx_buffer[5] |= 0x40;
+    #endif
 
     // pedal cadence
     ui8_tx_buffer[6] = ui8_pedal_cadence_RPM;
@@ -1581,90 +1593,93 @@ static void uart_send_package(void) {
     ui8_tx_buffer[8] = ui8_system_state;
 
     // motor temperature
-    #ifdef MAIN_TIME_DEBUG
-    ui8_tx_buffer[9] = ui8_max_motor_time;
-    #else
     ui8_tx_buffer[9] = ui16_motor_temperature_filtered_x10 / 10U;
-    #endif
+
+    // PWM duty_cycle
+    ui8_tx_buffer[10] = ui8_g_duty_cycle;
+
+    // motor speed in ERPS
+    ui8_tx_buffer[11] = (uint8_t) (ui16_motor_speed_erps & 0xff);
+    ui8_tx_buffer[12] = (uint8_t) (ui16_motor_speed_erps >> 8);
+
+    // FOC angle
+    ui8_tx_buffer[13] = ui8_g_foc_angle;
+
+    // Field Weakening Hall counter offset
+    ui8_tx_buffer[14] = ui8_fw_hall_counter_offset;
 
     if (ui8_riding_mode == MOTOR_CALIBRATION_MODE) {
         ui16_temp = ui16_hall_calib_cnt[0];
-        ui8_tx_buffer[10] = (uint8_t) (ui16_temp & 0xff);
-        ui8_tx_buffer[11] = (uint8_t) (ui16_temp >> 8);
+        ui8_tx_buffer[15] = (uint8_t) (ui16_temp & 0xff);
+        ui8_tx_buffer[16] = (uint8_t) (ui16_temp >> 8);
         ui16_temp = ui16_hall_calib_cnt[1];
-        ui8_tx_buffer[12] = (uint8_t) (ui16_temp & 0xff);
-        ui8_tx_buffer[13] = (uint8_t) (ui16_temp >> 8);
+        ui8_tx_buffer[17] = (uint8_t) (ui16_temp & 0xff);
+        ui8_tx_buffer[18] = (uint8_t) (ui16_temp >> 8);
         ui16_temp = ui16_hall_calib_cnt[2];
-        ui8_tx_buffer[14] = (uint8_t) (ui16_temp & 0xff);
-        ui8_tx_buffer[15] = (uint8_t) (ui16_temp >> 8);
+        ui8_tx_buffer[19] = (uint8_t) (ui16_temp & 0xff);
+        ui8_tx_buffer[20] = (uint8_t) (ui16_temp >> 8);
         ui16_temp = ui16_hall_calib_cnt[3];
-        ui8_tx_buffer[16] = (uint8_t) (ui16_temp & 0xff);
-        ui8_tx_buffer[17] = (uint8_t) (ui16_temp >> 8);
+        ui8_tx_buffer[21] = (uint8_t) (ui16_temp & 0xff);
+        ui8_tx_buffer[22] = (uint8_t) (ui16_temp >> 8);
         ui16_temp = ui16_hall_calib_cnt[4];
-        ui8_tx_buffer[18] = (uint8_t) (ui16_temp & 0xff);
-        ui8_tx_buffer[19] = (uint8_t) (ui16_temp >> 8);
+        ui8_tx_buffer[23] = (uint8_t) (ui16_temp & 0xff);
+        ui8_tx_buffer[24] = (uint8_t) (ui16_temp >> 8);
         ui16_temp = ui16_hall_calib_cnt[5];
-        ui8_tx_buffer[20] = (uint8_t) (ui16_temp & 0xff);
-        ui8_tx_buffer[21] = (uint8_t) (ui16_temp >> 8);
+        ui8_tx_buffer[25] = (uint8_t) (ui16_temp & 0xff);
+        ui8_tx_buffer[26] = (uint8_t) (ui16_temp >> 8);
     } else {
-        // optional ADC channel value
-        #ifdef MAIN_TIME_DEBUG
-        ui8_tx_buffer[10] = ui8_max_ebike_time;
-        #else
-        ui8_tx_buffer[10] = UI8_ADC_THROTTLE;
-        #endif
-
-        // throttle value with offset applied and mapped from 0 to 255
-        if (m_configuration_variables.ui8_optional_ADC_function == THROTTLE_CONTROL)
-            ui8_tx_buffer[11] = ui8_adc_throttle;
-        else
-            ui8_tx_buffer[11] = 0;
 
         // ADC torque sensor
-        #ifdef PWM_TIME_DEBUG
-        ui16_temp = ui16_max_pwm_down_time;
-        #else
         ui16_temp = ui16_adc_pedal_torque;
-        #endif
-        ui8_tx_buffer[12] = (uint8_t) (ui16_temp & 0xff);
-        ui8_tx_buffer[13] = (uint8_t) (ui16_temp >> 8);
-
-        // PWM duty_cycle
-        ui8_tx_buffer[14] = ui8_g_duty_cycle;
-
-        // motor speed in ERPS
-        ui8_tx_buffer[15] = (uint8_t) (ui16_motor_speed_erps & 0xff);
-        ui8_tx_buffer[16] = (uint8_t) (ui16_motor_speed_erps >> 8);
-
-        // FOC angle
-        ui8_tx_buffer[17] = ui8_g_foc_angle;
-
-        // wheel_speed_sensor_tick_counter
-        ui8_tx_buffer[18] = (uint8_t) (ui32_wheel_speed_sensor_ticks_total & 0xff);
-        ui8_tx_buffer[19] = (uint8_t) ((ui32_wheel_speed_sensor_ticks_total >> 8) & 0xff);
-        ui8_tx_buffer[20] = (uint8_t) ((ui32_wheel_speed_sensor_ticks_total >> 16) & 0xff);
+        ui8_tx_buffer[15] = (uint8_t) (ui16_temp & 0xff);
+        ui8_tx_buffer[16] = (uint8_t) (ui16_temp >> 8);
 
         // pedal torque x100
         ui16_temp = ui16_pedal_torque_x100;
-        ui8_tx_buffer[21] = (uint8_t) (ui16_temp & 0xff);
-        ui8_tx_buffer[22] = (uint8_t) (ui16_temp >> 8);
+        ui8_tx_buffer[17] = (uint8_t) (ui16_temp & 0xff);
+        ui8_tx_buffer[18] = (uint8_t) (ui16_temp >> 8);
 
-        // Crank Revolutions
-        ui16_temp = (ui32_crank_revolutions_x20 / CADENCE_SENSOR_NUMBER_MAGNETS);
-        ui8_tx_buffer[23] = (uint8_t) (ui16_temp & 0xff);
-        ui8_tx_buffer[24] = (uint8_t) (ui16_temp >> 8);
+        // optional ADC channel value
+        ui8_tx_buffer[19] = UI8_ADC_THROTTLE;
 
-        // Free for future use
-        #ifdef PWM_TIME_DEBUG
-        ui16_temp = ui16_max_pwm_up_time;
-        ui8_tx_buffer[25] = (uint8_t) (ui16_temp & 0xff);
-        ui8_tx_buffer[26] = (uint8_t) (ui16_temp >> 8);
+        // throttle value with offset applied and mapped from 0 to 255
+        if (m_configuration_variables.ui8_optional_ADC_function == THROTTLE_CONTROL)
+            ui8_tx_buffer[20] = ui8_adc_throttle;
+        else
+            ui8_tx_buffer[20] = 0;
+
+
+        // wheel_speed_sensor_tick_counter
+        #if defined(PWM_TIME_DEBUG) || defined (MAIN_TIME_DEBUG)
+            #ifdef MAIN_TIME_DEBUG
+                ui8_tx_buffer[21] = ui8_max_ebike_time;
+            #endif
+            #ifdef PWM_TIME_DEBUG
+                ui16_temp = ui16_max_pwm_down_time;
+                ui8_tx_buffer[22] = (uint8_t) (ui16_temp & 0xff);
+                ui8_tx_buffer[23] = (uint8_t) (ui16_temp >> 8);
+            #endif
         #else
-        ui8_tx_buffer[25] = ui8_fw_hall_counter_offset;
-        ui8_tx_buffer[26] = 0;
+            ui8_tx_buffer[21] = (uint8_t) (ui32_wheel_speed_sensor_ticks_total & 0xff);
+            ui8_tx_buffer[22] = (uint8_t) ((ui32_wheel_speed_sensor_ticks_total >> 8) & 0xff);
+            ui8_tx_buffer[23] = (uint8_t) ((ui32_wheel_speed_sensor_ticks_total >> 16) & 0x0f);
         #endif
 
+        // Crank Revolutions
+        #ifdef PWM_TIME_DEBUG
+            ui16_temp = ui16_max_pwm_up_time;
+        #else
+            ui16_temp = (ui32_crank_revolutions_x20 / CADENCE_SENSOR_NUMBER_MAGNETS);
+        #endif
+            ui8_tx_buffer[24] = (uint8_t) (ui16_temp & 0xff);
+            ui8_tx_buffer[25] = (uint8_t) (ui16_temp >> 8);
 
+        // Free for future use
+        #ifdef MAIN_TIME_DEBUG
+            ui8_tx_buffer[26] = ui8_max_motor_time;
+        #else
+            ui8_tx_buffer[26] = 0;
+        #endif
     }
 
     // prepare crc of the package
