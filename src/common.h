@@ -17,6 +17,7 @@
 #define eMTB_ASSIST_MODE                          4
 #define WALK_ASSIST_MODE                          5
 #define CRUISE_MODE                               6
+#define MOTOR_CALIBRATION_MODE                    7
 
 // error codes
 #define NO_ERROR                                  0
