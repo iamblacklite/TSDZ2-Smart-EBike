@@ -1420,12 +1420,8 @@ static void uart_receive_package(void) {
 				break;
 
             case 1:
-            	// Phase offset angle adjust (normally 0; value changes during motor calibration)
-            	// Limit value to +/-10
-            	if ((ui8_rx_buffer[5] < 11) || (ui8_rx_buffer[5] > 245))
-            		ui8_phase_angle_adj = ui8_rx_buffer[5];
-            	else
-            		ui8_phase_angle_adj = 0;
+                // Free for future use
+                // ui8_rx_buffer[5]
 
                 // wheel perimeter
                 m_configuration_variables.ui16_wheel_perimeter = (((uint16_t) ui8_rx_buffer[7]) << 8) + ((uint16_t) ui8_rx_buffer[6]);
@@ -1498,7 +1494,19 @@ static void uart_receive_package(void) {
 				} else {
 					ui8_hall_counter_offset_up = HALL_COUNTER_OFFSET_UP;
 					ui8_hall_counter_offset_down = HALL_COUNTER_OFFSET_DOWN;
-			}
+				}
+
+                // Phase offset angle adjust
+                // Limit value to +/-10
+                if ((ui8_rx_buffer[7] < 11) || (ui8_rx_buffer[7] > 245))
+                    ui8_phase_angle_adj = ui8_rx_buffer[7];
+                else
+                    ui8_phase_angle_adj = 0;
+
+                // Free for future use
+                // ui8_rx_buffer[8]
+                // ui8_rx_buffer[9]
+                // ui8_rx_buffer[10]
             	break;
             }
         }
