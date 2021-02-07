@@ -618,8 +618,8 @@ static void apply_cadence_assist(uint8_t testMode) {
         uint8_t ui8_cadence_assist_duty_cycle_target = ui8_riding_mode_parameter;
 
         // limit cadence assist duty cycle target
-        if (ui8_cadence_assist_duty_cycle_target > PWM_DUTY_CYCLE_MAX) {
-            ui8_cadence_assist_duty_cycle_target = PWM_DUTY_CYCLE_MAX;
+        if (ui8_cadence_assist_duty_cycle_target >= PWM_DUTY_CYCLE_MAX) {
+            ui8_cadence_assist_duty_cycle_target = PWM_DUTY_CYCLE_MAX-1;
         }
 
         // set motor acceleration
@@ -889,7 +889,7 @@ static void apply_cruise() {
                 (uint8_t)0,                   // minimum control output from PID
                 (uint8_t)250,                 // maximum control output from PID
                 (uint8_t)0,                   // minimum duty cycle
-                (uint8_t)PWM_DUTY_CYCLE_MAX); // maximum duty cycle
+                (uint8_t)(PWM_DUTY_CYCLE_MAX-1)); // maximum duty cycle
     }
 }
 

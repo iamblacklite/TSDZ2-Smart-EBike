@@ -5,11 +5,9 @@
 replace restart {
 	dec %1
 	tnz %1
-	jrne  %2
 } by {
     ; peephole replaced dec + tnz + jrne with dec + jrne
 	dec %1
-	jrne %2
 }
 
 

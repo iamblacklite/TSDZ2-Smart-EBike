@@ -56,10 +56,10 @@ volatile uint8_t ui8_adc_battery_voltage_cut_off = 0xff;
 volatile uint8_t ui8_adc_battery_current_filtered = 0;
 volatile uint8_t ui8_controller_adc_battery_current_target = 0;
 volatile uint8_t ui8_g_duty_cycle = 0;
-volatile uint8_t ui8_fw_hall_counter_offset = 0;
 volatile uint8_t ui8_controller_duty_cycle_target = 0;
 volatile uint8_t ui8_g_foc_angle = 0;
-volatile uint8_t ui8_phase_angle_adj = 0;
+// Field Weakening Hall offset (added during interpolation)
+volatile uint8_t ui8_fw_hall_counter_offset = 0;
 
 static uint8_t ui8_counter_duty_cycle_ramp_up = 0;
 static uint8_t ui8_counter_duty_cycle_ramp_down = 0;
@@ -163,19 +163,19 @@ void HALL_SENSOR_C_PORT_IRQHandler(void) __interrupt(EXTI_HALL_C_IRQ)  {
         ui8_hall_state_irq |= (unsigned char)0x04;
 }
 
-// Last rotor complete revolution reference counter value
+// Last rotor complete revolution Hall ticks
 static uint16_t ui16_hall_360_ref;
+
 // Last Hall sensor state
-static uint8_t  ui8_hall_sensors_state_last = 0; // Invalid value, force execution of Hall code at the first run
-// temporay variables (at the end of down irq stores phase a,b,c voltages)
-static uint16_t ui16_a;
-static uint16_t ui16_b;
-static uint16_t ui16_c;
-// Last Hall transition reference counter value
+static uint8_t  ui8_hall_sensors_state_last = 7; // Invalid value, force execution of Hall code at the first run
+
+// Hall counter value of last Hall transition
 static uint16_t ui16_hall_60_ref_old;
+
 // Hall Timer counter value calculated for the 6 different Hall transitions intervals
 volatile uint16_t ui16_hall_calib_cnt[6];
 
+// phase angle for rotor positions 30, 90, 150, 210, 270, 330 degrees
 volatile uint8_t ui8_hall_ref_angles[6] = {
 		PHASE_ROTOR_ANGLE_30,
 		PHASE_ROTOR_ANGLE_90,
@@ -183,12 +183,23 @@ volatile uint8_t ui8_hall_ref_angles[6] = {
 		PHASE_ROTOR_ANGLE_210,
 		PHASE_ROTOR_ANGLE_270,
 		PHASE_ROTOR_ANGLE_330};
+
+// Hall counter offset for states 3,5,6 (value configured from Android App)
 volatile uint8_t ui8_hall_counter_offset_up = HALL_COUNTER_OFFSET_UP;
+// Hall counter offset for states 1,2,4 (value configured from Android App)
 volatile uint8_t ui8_hall_counter_offset_down = HALL_COUNTER_OFFSET_DOWN;
+// Phase angle shift (value configured in Android App)
+volatile uint8_t ui8_phase_angle_adj = 0;
 
-
+// Hall offset of current Hall state
 static uint8_t ui8_hall_counter_offset;
-static uint8_t  ui8_temp;
+
+// temporay variables (at the end of down irq stores phase a,b,c voltages)
+static uint16_t ui16_a;
+static uint16_t ui16_b;
+static uint16_t ui16_c;
+
+static uint8_t ui8_temp;
 
 void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
 {
@@ -205,7 +216,8 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
         //      bit 0 0x01 Hall sensor A
         //      bit 1 0x02 Hall sensor B
         //      bit 2 0x04 Hall sensor C
-        // ui8_hall_sensors_state sequence with motor forward rotation: 0x04, 0x06, 0x02, 0x03, 0x01, 0x05
+        // ui8_hall_sensors_state sequence with motor forward rotation: 0x06, 0x02, 0x03, 0x01, 0x05, 0x04
+        //                                              rotor position:  30,   90,   150,  210,  270,  330 degrees
         #ifndef __CDT_PARSER__ // disable Eclipse syntax check
         __asm
             push cc             // save current Interrupt Mask (I1,I0 bits of CC register)
@@ -228,32 +240,18 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
         if (ui8_hall_sensors_state_last != ui8_temp) {
             // Check first the state with the heaviest computation
             if (ui8_temp == 0x01) {
-                if (ui8_hall_360_ref_valid && (ui8_hall_sensors_state_last == 0x03)) {
+                // if (ui8_hall_360_ref_valid && (ui8_hall_sensors_state_last == 0x03)) {
+                if (ui8_hall_sensors_state_last == ui8_hall_360_ref_valid) {
                     ui16_hall_counter_total = ui16_b - ui16_hall_360_ref;
                     ui8_motor_commutation_type = SINEWAVE_INTERPOLATION_60_DEGREES;
                 }
-                ui16_hall_360_ref = ui16_b;
-                ui8_hall_360_ref_valid = 1;
+                ui8_hall_360_ref_valid = 0x03;
                 ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[3]; // Rotor at 210 deg
                 ui8_hall_counter_offset = ui8_hall_counter_offset_down;
-                ui16_hall_calib_cnt[3] = ui16_b - ui16_hall_60_ref_old;
+                ui16_hall_360_ref = ui16_b;
+                ui16_hall_calib_cnt[3] = ui16_hall_360_ref - ui16_hall_60_ref_old;
             } else
                 switch (ui8_temp) {
-                    case 0x06:
-                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[0]; // Rotor at 30 deg
-                        ui8_hall_counter_offset = ui8_hall_counter_offset_up;
-                        ui16_hall_calib_cnt[0] = ui16_b - ui16_hall_60_ref_old;
-                        break;
-                    case 0x05:
-                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[4]; // Rotor at 270 deg
-                        ui8_hall_counter_offset = ui8_hall_counter_offset_up;
-                        ui16_hall_calib_cnt[4] = ui16_b - ui16_hall_60_ref_old;
-                        break;
-                    case 0x04:
-                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[5]; // Rotor at 330 deg
-                        ui8_hall_counter_offset = ui8_hall_counter_offset_down;
-                        ui16_hall_calib_cnt[5] = ui16_b - ui16_hall_60_ref_old;
-                        break;
                     case 0x02:
                         ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[1]; // Rotor at 90 deg
                         ui8_hall_counter_offset = ui8_hall_counter_offset_down;
@@ -264,23 +262,44 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
                         ui8_hall_counter_offset = ui8_hall_counter_offset_up;
                         ui16_hall_calib_cnt[2] = ui16_b - ui16_hall_60_ref_old;
                         break;
+                    case 0x04:
+                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[5]; // Rotor at 330 deg
+                        ui8_hall_counter_offset = ui8_hall_counter_offset_down;
+                        ui16_hall_calib_cnt[5] = ui16_b - ui16_hall_60_ref_old;
+                        break;
+                    case 0x05:
+                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[4]; // Rotor at 270 deg
+                        ui8_hall_counter_offset = ui8_hall_counter_offset_up;
+                        ui16_hall_calib_cnt[4] = ui16_b - ui16_hall_60_ref_old;
+                        break;
+                    case 0x06:
+                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[0]; // Rotor at 30 deg
+                        ui8_hall_counter_offset = ui8_hall_counter_offset_up;
+                        ui16_hall_calib_cnt[0] = ui16_b - ui16_hall_60_ref_old;
+                        break;
                     default:
                         return;
                 }
 
             // update last hall sensor state
-            ui16_hall_60_ref_old = ui16_b;
+            #ifndef __CDT_PARSER__ // disable Eclipse syntax check
+            __asm
+                // optimization ldw, ldw -> mov,mov
+                // ui16_hall_60_ref_old = ui16_b;
+                mov _ui16_hall_60_ref_old+0, _ui16_b+0
+                mov _ui16_hall_60_ref_old+1, _ui16_b+1
+            __endasm;
+            #endif
             ui8_hall_sensors_state_last = ui8_temp;
-        }
-
-        // Verify if rotor stopped (< 10 ERPS)
-        // store in ui16_a the Hall counter ticks from the last Hall sensor transition
-        ui16_a = ui16_a - ui16_b;
-        if (ui16_a > (HALL_COUNTER_FREQ/MOTOR_ROTOR_INTERPOLATION_MIN_ERPS/6)) {
-            ui8_motor_commutation_type = BLOCK_COMMUTATION;
-            ui8_g_foc_angle = 0;
-            ui8_hall_360_ref_valid = 0;
-            ui16_hall_counter_total = 0xffff;
+        } else {
+            // Verify if rotor stopped (< 10 ERPS)
+            // ui16_a - ui16_b = Hall counter ticks from the last Hall sensor transition;
+            if ((ui16_a - ui16_b) > (HALL_COUNTER_FREQ/MOTOR_ROTOR_INTERPOLATION_MIN_ERPS/6)) {
+                ui8_motor_commutation_type = BLOCK_COMMUTATION;
+                ui8_g_foc_angle = 0;
+                ui8_hall_360_ref_valid = 0;
+                ui16_hall_counter_total = 0xffff;
+            }
         }
 
 
@@ -301,7 +320,8 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             // 3) the result should be less than 256/6 (hall spacing of 60deg) + 12 (max offset) ~= 55 (scale 0-255)
             uint8_t ui8_cnt = 6;
             // Add Field Weakening counter offset (fw angle increases with rotor speed)
-            ui16_a = ((uint8_t)(ui8_fw_hall_counter_offset + (uint8_t)HALL_COUNTER_FIXED_OFFSET) + ui16_a) << 2;
+            // ui16_a - ui16_b = Hall counter ticks from the last Hall sensor transition;
+            ui16_a = ((uint8_t)(ui8_fw_hall_counter_offset + ui8_hall_counter_offset) + (ui16_a - ui16_b)) << 2;
 
             do {
                 ui16_a <<= 1;
@@ -320,12 +340,13 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             clr _ui8_temp+0
             tnz _ui8_motor_commutation_type+0
             jreq 00011$
-            // ui16_a = (ui16_a + ui8_fw_hall_counter_offset + HALL_COUNTER_FIXED_OFFSET) << 2;
+            // ui16_a = ((ui16_a - ui16_b) + ui8_fw_hall_counter_offset + ui8_hall_counter_offset) << 2;
             ld  a, _ui8_fw_hall_counter_offset+0
             add a, _ui8_hall_counter_offset+0
             clrw    x
             ld  xl, a
             addw    x, _ui16_a+0
+            subw    x, _ui16_b+0
             sllw x
             sllw x
             mov _ui16_b+0, #6
@@ -339,18 +360,16 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
         00013$:
             dec _ui16_b+0
             jrne 00012$
-            // _ui8_temp contains interpolation angle
+            // now ui8_temp contains the interpolation angle
         00011$: // BLOCK_COMMUTATION
-            // ui8_svm_table_index = ui8_temp + ui8_motor_phase_absolute_angle + ui8_g_foc_angle + ui8_phase_angle_adj;
+            // ui8_temp = ui8_temp + ui8_motor_phase_absolute_angle + ui8_g_foc_angle + ui8_phase_angle_adj;
             ld  a, _ui8_temp+0
             add a, _ui8_motor_phase_absolute_angle+0
             add a, _ui8_g_foc_angle+0
             add a, _ui8_phase_angle_adj
             ld _ui8_temp, a
-        __endasm;
-        #endif
 
-        // ui8_temp contains ui8_svm_table_index
+        // now ui8_temp contains ui8_svm_table_index
 
         /****************************************************************************/
         // calculate final PWM duty_cycle values to be applied to TIMER1
@@ -370,13 +389,11 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             ui16_a = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_a >> 8)) << 1;
         }
         */
-        #ifndef __CDT_PARSER__ // disable Eclipse syntax check
-        __asm
-            ld  a, _ui8_temp+0
+
             add a, #0xab    // ui8_temp = ui8_svm_table[(uint8_t) (ui8_svm_table_index + 171)];
             clrw x
             ld  xl, a
-            ld  a, (_ui8_svm_table, x)
+            ld  a, (_ui8_svm_table+0, x)
             cp  a, #0x6a    // if (ui8_temp > MIDDLE_SVM_TABLE)
             jrule   00020$
             // ui16_a = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
@@ -414,8 +431,6 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             sll a
             ld  _ui16_a+1, a
         00021$:
-        __endasm;
-        #endif
 
         /*
         // phase B as reference phase
@@ -428,12 +443,11 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             ui16_b = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t)(ui16_b >> 8)) << 1;
         }
         */
-        #ifndef __CDT_PARSER__ // disable Eclipse syntax check
-        __asm
+
             ld a, _ui8_temp+0   // ui8_svm_table_index is stored in ui8_temp
             clrw x              // ui8_temp = ui8_svm_table[ui8_svm_table_index];
             ld  xl, a
-            ld  a, (_ui8_svm_table, x)
+            ld  a, (_ui8_svm_table+0, x)
             cp  a, #0x6a    // if (ui8_temp > MIDDLE_SVM_TABLE)
             jrule   00024$
             // ui16_b = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
@@ -471,8 +485,6 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             sll a
             ld  _ui16_b+1, a
         00025$:
-        __endasm;
-        #endif
 
         /*
         // phase C is advanced 120 degrees over phase B
@@ -485,13 +497,12 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             ui16_c = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_c >> 8)) << 1;
         }
         */
-        #ifndef __CDT_PARSER__ // disable Eclipse syntax check
-        __asm
+
             ld a, _ui8_temp+0     // ui8_svm_table_index is stored in ui8_temp
             add a, #0x55        // ui8_temp = ui8_svm_table[(uint8_t) (ui8_svm_table_index + 85 /* 120º */)];
             clrw x
             ld  xl, a
-            ld  a, (_ui8_svm_table, x)
+            ld  a, (_ui8_svm_table+0, x)
             cp  a, #0x6a    // if (ui8_temp > MIDDLE_SVM_TABLE)
             jrule   00028$
             // ui16_c = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
