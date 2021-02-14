@@ -139,6 +139,13 @@ extern volatile uint8_t ui8_main_time;
 volatile uint8_t  ui8_hall_state_irq = 0;
 volatile uint8_t  ui8_hall_60_ref_irq[2];
 
+
+// Interrupt routines called on Hall sensor state change (Highest priority)
+// - read the Hall transition reference counter value (ui8_hall_60_ref_irq)
+// - read the hall signal state (ui8_hall_state_irq)
+//      - Hall A: bit 0
+//      - Hall B: bit 1
+//      - Hall C: bit 2
 void HALL_SENSOR_A_PORT_IRQHandler(void)  __interrupt(EXTI_HALL_A_IRQ) {
     ui8_hall_60_ref_irq[0] = TIM3->CNTRH;
     ui8_hall_60_ref_irq[1] = TIM3->CNTRL;
@@ -191,7 +198,7 @@ volatile uint8_t ui8_hall_counter_offset_down = HALL_COUNTER_OFFSET_DOWN;
 // Phase angle shift (value configured in Android App)
 volatile uint8_t ui8_phase_angle_adj = 0;
 
-// Hall offset of current Hall state
+// Hall offset for current Hall state
 static uint8_t ui8_hall_counter_offset;
 
 // temporay variables (at the end of down irq stores phase a,b,c voltages)
@@ -205,19 +212,6 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
 {
     // bit 5 of TIM1->CR1 contains counter direction (0=up, 1=down)
     if (TIM1->CR1 & 0x10) {
-        /****************************************************************************/
-        // read hall sensor signals and:
-        // - find the motor rotor absolute angle
-        // - check so that motor is not rotating backwards, if it does, set ERPS to 0
-
-        // read hall sensors signal pins and mask other pins
-        // hall sensors sequence with motor forward rotation: C, CB, B, BA, A, AC, ..
-        // ui8_hall_sensors_state:
-        //      bit 0 0x01 Hall sensor A
-        //      bit 1 0x02 Hall sensor B
-        //      bit 2 0x04 Hall sensor C
-        // ui8_hall_sensors_state sequence with motor forward rotation: 0x06, 0x02, 0x03, 0x01, 0x05, 0x04
-        //                                              rotor position:  30,   90,   150,  210,  270,  330 degrees
         #ifndef __CDT_PARSER__ // disable Eclipse syntax check
         __asm
             push cc             // save current Interrupt Mask (I1,I0 bits of CC register)
@@ -236,25 +230,37 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
         // ui16_b stores the Hall sensor counter value of the last transition
         // ui16_a stores the current Hall sensor counter value
 
-        // run next code only when the hall sensors signal changes
+        /****************************************************************************/
+        // run next code only when the hall state changes
+        // hall sensors sequence with motor forward rotation: C, CB, B, BA, A, AC, ..
+        // ui8_temp (hall sensor state):
+        //      bit 0 0x01 Hall sensor A
+        //      bit 1 0x02 Hall sensor B
+        //      bit 2 0x04 Hall sensor C
+        // ui8_hall_sensors_state sequence with motor forward rotation: 0x06, 0x02, 0x03, 0x01, 0x05, 0x04
+        //                                              rotor position:  30,   90,   150,  210,  270,  330 degrees
         if (ui8_hall_sensors_state_last != ui8_temp) {
             // Check first the state with the heaviest computation
             if (ui8_temp == 0x01) {
                 // if (ui8_hall_360_ref_valid && (ui8_hall_sensors_state_last == 0x03)) {
-                if (ui8_hall_sensors_state_last == ui8_hall_360_ref_valid) {
+                if (ui8_hall_sensors_state_last == ui8_hall_360_ref_valid) { // faster check
                     ui16_hall_counter_total = ui16_b - ui16_hall_360_ref;
                     ui8_motor_commutation_type = SINEWAVE_INTERPOLATION_60_DEGREES;
                 }
                 ui8_hall_360_ref_valid = 0x03;
                 ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[3]; // Rotor at 210 deg
+                // set hall counter offset for rotor interpolation based on current hall state
                 ui8_hall_counter_offset = ui8_hall_counter_offset_down;
                 ui16_hall_360_ref = ui16_b;
+                // calculate hall ticks between the last two Hall transitions (for Hall calibration)
                 ui16_hall_calib_cnt[3] = ui16_hall_360_ref - ui16_hall_60_ref_old;
             } else
                 switch (ui8_temp) {
                     case 0x02:
                         ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[1]; // Rotor at 90 deg
+                        // set hall counter offset for rotor interpolation based on current hall state
                         ui8_hall_counter_offset = ui8_hall_counter_offset_down;
+                        // calculate hall ticks between the last two Hall transitions (for Hall calibration)
                         ui16_hall_calib_cnt[1] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     case 0x03:
@@ -284,7 +290,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             // update last hall sensor state
             #ifndef __CDT_PARSER__ // disable Eclipse syntax check
             __asm
-                // optimization ldw, ldw -> mov,mov
+                // speed optimization ldw, ldw -> mov,mov
                 // ui16_hall_60_ref_old = ui16_b;
                 mov _ui16_hall_60_ref_old+0, _ui16_b+0
                 mov _ui16_hall_60_ref_old+1, _ui16_b+1
@@ -305,7 +311,6 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
 
         /****************************************************************************/
         // - calculate interpolation angle and sine wave table index
-        // calculate the interpolation angle (and it doesn't work when motor starts and at very low speeds)
 
         /*
         ui8_temp = 0; // interpolation angle
@@ -317,8 +322,8 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             // Faster implementation of the above operation based on the following assumptions:
             // 1) ui16_a < 8192 (only 13 of 16 significants bits)
             // 2) LSB of (ui16_a << 8) is obviously 0x00
-            // 3) the result should be less than 256/6 (hall spacing of 60deg) + 12 (max offset) ~= 55 (scale 0-255)
-            uint8_t ui8_cnt = 6;
+            // 3) The result to should be less than 64 (90 degrees)
+            uint8_t ui8_cnt = 6; //max 6 loops: result < 64
             // Add Field Weakening counter offset (fw angle increases with rotor speed)
             // ui16_a - ui16_b = Hall counter ticks from the last Hall sensor transition;
             ui16_a = ((uint8_t)(ui8_fw_hall_counter_offset + ui8_hall_counter_offset) + (ui16_a - ui16_b)) << 2;
@@ -390,7 +395,8 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
         }
         */
 
-            add a, #0xab    // ui8_temp = ui8_svm_table[(uint8_t) (ui8_svm_table_index + 171)];
+            // ui8_temp = ui8_svm_table[(uint8_t) (ui8_svm_table_index + 171)];
+            add a, #0xab
             clrw x
             ld  xl, a
             ld  a, (_ui8_svm_table+0, x)

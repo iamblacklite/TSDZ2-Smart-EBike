@@ -38,7 +38,8 @@
 #define HALL_COUNTER_FREQ                                       250000U // 250KHz or 4us
 #define HALL_COUNTER_INTERP_MAX                                 4166 // (HALL_COUNTER_FREQ/MOTOR_ROTOR_INTERPOLATION_MIN_ERPS/6)
 // ramp up/down PWM cycles count
-#define PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_DEFAULT             195    // 160 -> 160 * 64 us for every duty cycle increment at 15.625KHz
+#define PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_CADENCE_OFFSET      50     // PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP offset for cadence assist mode
+#define PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_DEFAULT             195    // (should be less than 255-50->205) 160 -> 160 * 64 us for every duty cycle increment at 15.625KHz
 #define PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN                 24     // 20 -> 20 * 64 us for every duty cycle increment at 15.625KHz
 #define PWM_DUTY_CYCLE_RAMP_DOWN_INVERSE_STEP_DEFAULT           49     // 40 -> 40 * 64 us for every duty cycle decrement at 15.625KHz
 #define PWM_DUTY_CYCLE_RAMP_DOWN_INVERSE_STEP_MIN               10     // 8 -> 8 * 64 us for every duty cycle decrement at 15.625KHz
@@ -103,12 +104,12 @@ HALL_COUNTER_OFFSET_UP:   28 + 15 -> 43
 ****************************************
 */
 
-#define HALL_COUNTER_OFFSET_UP  	                              43
-#define HALL_COUNTER_OFFSET_DOWN                                  23
-#define FW_HALL_COUNTER_OFFSET_MAX                                6
+#define HALL_COUNTER_OFFSET_UP                  45
+#define HALL_COUNTER_OFFSET_DOWN                24
+#define FW_HALL_COUNTER_OFFSET_MAX              6
 
 
-#define MOTOR_ROTOR_INTERPOLATION_MIN_ERPS     10
+#define MOTOR_ROTOR_INTERPOLATION_MIN_ERPS      10
 
 // Torque sensor values
 #define ADC_TORQUE_SENSOR_CALIBRATION_OFFSET    6

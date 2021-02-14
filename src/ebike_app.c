@@ -325,9 +325,9 @@ static void ebike_control_lights(void);
 static void ebike_control_motor(void);
 static void check_system(void);
 
-static void apply_power_assist();
+static void apply_power_assist(uint8_t);
 static void apply_torque_assist();
-static void apply_cadence_assist(uint8_t);
+static void apply_calibration_assist();
 static void apply_emtb_assist();
 static void apply_walk_assist();
 static void apply_cruise();
@@ -392,13 +392,11 @@ static void ebike_control_motor(void) {
     // select riding mode
     switch (ui8_riding_mode) {
         case POWER_ASSIST_MODE:
-            apply_power_assist();
+        case CADENCE_ASSIST_MODE:
+            apply_power_assist(ui8_riding_mode);
             break;
         case TORQUE_ASSIST_MODE:
             apply_torque_assist();
-            break;
-        case CADENCE_ASSIST_MODE:
-            apply_cadence_assist((uint8_t)0);
             break;
         case eMTB_ASSIST_MODE:
             apply_emtb_assist();
@@ -410,7 +408,7 @@ static void ebike_control_motor(void) {
             apply_cruise();
             break;
         case MOTOR_CALIBRATION_MODE:
-            apply_cadence_assist((uint8_t)1);
+            apply_calibration_assist();
             break;
     }
 
@@ -427,20 +425,17 @@ static void ebike_control_motor(void) {
     // speed limit
     apply_speed_limit();
 
-    // check if to enable the motor
-    if ((!ui8_motor_enabled) && (ui16_motor_speed_erps == 0) && // only enable motor if stopped, else something bad can happen due to high currents/regen or similar
-            (ui8_adc_battery_current_target) && (!ui8_brake_state)) {
-        ui8_motor_enabled = 1;
-        ui8_g_duty_cycle = 0;
-        ui8_fw_hall_counter_offset = 0;
-        motor_enable_pwm();
-    }
-
-    // check if to disable the motor
+    // check if the motor should be enabled or disabled
     if ((ui8_motor_enabled) && (ui16_motor_speed_erps == 0) && (!ui8_adc_battery_current_target)
             && (!ui8_g_duty_cycle)) {
         ui8_motor_enabled = 0;
         motor_disable_pwm();
+    } else if ((!ui8_motor_enabled) && (ui16_motor_speed_erps == 0) // only enable motor if stopped, else something bad can happen due to high currents/regen or similar
+            && (ui8_adc_battery_current_target) && (!ui8_brake_state)) {
+        ui8_motor_enabled = 1;
+        ui8_g_duty_cycle = 0;
+        ui8_fw_hall_counter_offset = 0;
+        motor_enable_pwm();
     }
 
     // reset control parameters if... (safety)
@@ -489,40 +484,53 @@ static void ebike_control_motor(void) {
     }
 }
 
-static void apply_power_assist() {
-    uint8_t ui8_power_assist_multiplier_x50 = ui8_riding_mode_parameter;
+static void apply_power_assist(uint8_t ui8_riding_mode) {
+#define CADENCE_MAX_POWER 400/2
 
-    // check for assist without pedal rotation threshold when there is no pedal rotation and standing still
-    if (ui8_assist_without_pedal_rotation_threshold && !ui8_pedal_cadence_RPM && !ui16_wheel_speed_x10) {
-        if (ui16_adc_pedal_torque_delta > (110 - ui8_assist_without_pedal_rotation_threshold)) {
-            ui8_pedal_cadence_RPM = 4;
+    uint32_t ui32_power_assist_x100;
+
+    if (ui8_riding_mode == CADENCE_ASSIST_MODE) {
+        // ui8_riding_mode_parameter contains the target power in Watts
+        if (ui8_pedal_cadence_RPM) {
+            uint8_t ui8_cadence_power = ui8_riding_mode_parameter;
+            if (ui8_cadence_power > CADENCE_MAX_POWER)
+                ui8_cadence_power = CADENCE_MAX_POWER;
+            ui32_power_assist_x100 = (uint16_t)(ui8_cadence_power * 2 * 100);
+        } else
+            ui32_power_assist_x100 = 0;
+    } else {
+        // POWER_ASSIST_MODE
+        // ui8_riding_mode_parameter contains the power multiplier in 2% step values
+
+        // check for assist without pedal rotation threshold when there is no pedal rotation and standing still
+        if (ui8_assist_without_pedal_rotation_threshold && !ui8_pedal_cadence_RPM && !ui16_wheel_speed_x10) {
+            if (ui16_adc_pedal_torque_delta > (110 - ui8_assist_without_pedal_rotation_threshold)) {
+                ui8_pedal_cadence_RPM = 4;
+            }
         }
+
+        // calculate power assist by multiplying human power with the power assist multiplier
+        /*------------------------------------------------------------------------
+         NOTE: regarding the human power calculation
+
+         (1) Formula: pedal power = torque * rotations per second * 2 * pi
+         (2) Formula: pedal power = torque * rotations per minute * 2 * pi / 60
+         (3) Formula: pedal power = torque * rotations per minute * 0.1047
+         (4) Formula: pedal power = torque * 100 * rotations per minute * 0.001047
+         (5) Formula: pedal power = torque * 100 * rotations per minute / 955
+         (6) Formula: pedal power * 100  =  torque * 100 * rotations per minute * (100 / 955)
+         (7) Formula: assist power * 100  =  torque * 100 * rotations per minute * (100 / 955) * (ui8_power_assist_multiplier_x50 / 50)
+         (8) Formula: assist power * 100  =  torque * 100 * rotations per minute * (2 / 955) * ui8_power_assist_multiplier_x50
+         (9) Formula: assist power * 100  =  torque * 100 * rotations per minute * ui8_power_assist_multiplier_x50 / 480
+         ------------------------------------------------------------------------*/
+        ui32_power_assist_x100 = (((uint16_t)(ui8_pedal_cadence_RPM * ui8_riding_mode_parameter))
+                * (uint32_t)ui16_pedal_torque_x100) / 480U; // see note below
     }
 
-    // calculate power assist by multiplying human power with the power assist multiplier
-    uint32_t ui32_power_assist_x100 = (((uint16_t)(ui8_pedal_cadence_RPM * ui8_power_assist_multiplier_x50))
-            * (uint32_t)ui16_pedal_torque_x100) / 480U; // see note below
-
-    /*------------------------------------------------------------------------
-
-     NOTE: regarding the human power calculation
-
-     (1) Formula: pedal power = torque * rotations per second * 2 * pi
-     (2) Formula: pedal power = torque * rotations per minute * 2 * pi / 60
-     (3) Formula: pedal power = torque * rotations per minute * 0.1047
-     (4) Formula: pedal power = torque * 100 * rotations per minute * 0.001047
-     (5) Formula: pedal power = torque * 100 * rotations per minute / 955
-     (6) Formula: pedal power * 100  =  torque * 100 * rotations per minute * (100 / 955)
-     (7) Formula: assist power * 100  =  torque * 100 * rotations per minute * (100 / 955) * (ui8_power_assist_multiplier_x50 / 50)
-     (8) Formula: assist power * 100  =  torque * 100 * rotations per minute * (2 / 955) * ui8_power_assist_multiplier_x50
-     (9) Formula: assist power * 100  =  torque * 100 * rotations per minute * ui8_power_assist_multiplier_x50 / 480
-
-     ------------------------------------------------------------------------*/
-
-    // calculate target current
+    // Battery current target (Amps x 100)
     uint16_t ui16_battery_current_target_x100 = (ui32_power_assist_x100 * 1000) / ui16_battery_voltage_filtered_x1000;
 
-    // set battery current target in ADC steps
+    // Battery current target (ADC steps)
     uint16_t ui16_adc_battery_current_target = ui16_battery_current_target_x100 / BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X100;
 
     // set motor acceleration
@@ -530,11 +538,18 @@ static void apply_power_assist() {
         ui8_duty_cycle_ramp_up_inverse_step = PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN;
         ui8_duty_cycle_ramp_down_inverse_step = PWM_DUTY_CYCLE_RAMP_DOWN_INVERSE_STEP_MIN;
     } else {
-        ui8_duty_cycle_ramp_up_inverse_step = map_ui8((uint8_t) ui16_wheel_speed_x10,
-                (uint8_t)40, // 40 -> 4 kph
-                (uint8_t)200, // 200 -> 20 kph
-                (uint8_t) ui8_duty_cycle_ramp_up_inverse_step_default,
-                (uint8_t)PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN);
+        if (ui8_riding_mode == CADENCE_ASSIST_MODE)
+            ui8_duty_cycle_ramp_up_inverse_step = map_ui8((uint8_t) ui16_wheel_speed_x10,
+                    (uint8_t)40, // 40 -> 4 kph
+                    (uint8_t)200, // 200 -> 20 kph
+                    (uint8_t)ui8_duty_cycle_ramp_up_inverse_step_default + PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_CADENCE_OFFSET,
+                    (uint8_t)PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN);
+        else
+            ui8_duty_cycle_ramp_up_inverse_step = map_ui8((uint8_t) ui16_wheel_speed_x10,
+                    (uint8_t)40, // 40 -> 4 kph
+                    (uint8_t)200, // 200 -> 20 kph
+                    (uint8_t)ui8_duty_cycle_ramp_up_inverse_step_default,
+                    (uint8_t)PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN);
 
         ui8_duty_cycle_ramp_down_inverse_step = map_ui8((uint8_t) ui16_wheel_speed_x10,
                 (uint8_t)40, // 40 -> 4 kph
@@ -585,7 +600,7 @@ static void apply_torque_assist() {
             ui8_duty_cycle_ramp_up_inverse_step = map_ui8((uint8_t) ui16_wheel_speed_x10,
                     (uint8_t)40, // 40 -> 4 kph
                     (uint8_t)200, // 200 -> 20 kph
-                    (uint8_t) ui8_duty_cycle_ramp_up_inverse_step_default,
+                    (uint8_t)ui8_duty_cycle_ramp_up_inverse_step_default,
                     (uint8_t)PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN);
 
             ui8_duty_cycle_ramp_down_inverse_step = map_ui8((uint8_t) ui16_wheel_speed_x10,
@@ -610,41 +625,24 @@ static void apply_torque_assist() {
     }
 }
 
-static void apply_cadence_assist(uint8_t testMode) {
-#define CADENCE_ASSIST_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_OFFSET   50
+static void apply_calibration_assist() {
+    // ui8_riding_mode_parameter contains the target duty cycle
+    uint8_t ui8_calibration_assist_duty_cycle_target = ui8_riding_mode_parameter;
 
-    if (ui8_pedal_cadence_RPM || testMode) {
-        // get the cadence assist duty cycle target
-        uint8_t ui8_cadence_assist_duty_cycle_target = ui8_riding_mode_parameter;
-
-        // limit cadence assist duty cycle target
-        if (ui8_cadence_assist_duty_cycle_target >= PWM_DUTY_CYCLE_MAX) {
-            ui8_cadence_assist_duty_cycle_target = PWM_DUTY_CYCLE_MAX-1;
-        }
-
-        // set motor acceleration
-        if (ui16_wheel_speed_x10 >= 200) {
-            ui8_duty_cycle_ramp_up_inverse_step = PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN;
-            ui8_duty_cycle_ramp_down_inverse_step = PWM_DUTY_CYCLE_RAMP_DOWN_INVERSE_STEP_MIN;
-        } else {
-            ui8_duty_cycle_ramp_up_inverse_step = map_ui8((uint8_t) ui16_wheel_speed_x10,
-                    (uint8_t)40, // 40 -> 4 kph
-                    (uint8_t)200, // 200 -> 20 kph
-                    (uint8_t)ui8_duty_cycle_ramp_up_inverse_step_default + CADENCE_ASSIST_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_OFFSET,
-                    (uint8_t)PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN);
-
-            ui8_duty_cycle_ramp_down_inverse_step = map_ui8((uint8_t) ui16_wheel_speed_x10,
-                    (uint8_t)40, // 40 -> 4 kph
-                    (uint8_t)200, // 200 -> 20 kph
-                    (uint8_t)PWM_DUTY_CYCLE_RAMP_DOWN_INVERSE_STEP_DEFAULT,
-                    (uint8_t)PWM_DUTY_CYCLE_RAMP_DOWN_INVERSE_STEP_MIN);
-        }
-        // set battery current target
-        ui8_adc_battery_current_target = ui8_adc_battery_current_max;
-
-        // set duty cycle target
-        ui8_duty_cycle_target = ui8_cadence_assist_duty_cycle_target;
+    // limit cadence assist duty cycle target
+    if (ui8_calibration_assist_duty_cycle_target >= PWM_DUTY_CYCLE_MAX) {
+        ui8_calibration_assist_duty_cycle_target = (uint8_t)(PWM_DUTY_CYCLE_MAX-1);
     }
+
+    // set motor acceleration
+    ui8_duty_cycle_ramp_up_inverse_step = PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN;
+    ui8_duty_cycle_ramp_down_inverse_step = PWM_DUTY_CYCLE_RAMP_DOWN_INVERSE_STEP_MIN;
+
+    // set battery current target
+    ui8_adc_battery_current_target = ui8_adc_battery_current_max;
+
+    // set duty cycle target
+    ui8_duty_cycle_target = ui8_calibration_assist_duty_cycle_target;
 }
 
 static void apply_emtb_assist() {
@@ -757,7 +755,7 @@ static void apply_emtb_assist() {
             ui8_duty_cycle_ramp_up_inverse_step = map_ui8((uint8_t) ui16_wheel_speed_x10,
                     (uint8_t)40, // 40 -> 4 kph
                     (uint8_t)200, // 200 -> 20 kph
-                    (uint8_t) ui8_duty_cycle_ramp_up_inverse_step_default,
+                    (uint8_t)ui8_duty_cycle_ramp_up_inverse_step_default,
                     (uint8_t)PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN);
 
             ui8_duty_cycle_ramp_down_inverse_step = map_ui8((uint32_t) ui16_wheel_speed_x10,
