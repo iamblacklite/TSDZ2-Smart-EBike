@@ -191,12 +191,14 @@ volatile uint8_t ui8_hall_ref_angles[6] = {
 		PHASE_ROTOR_ANGLE_270,
 		PHASE_ROTOR_ANGLE_330};
 
-// Hall counter offset for states 3,5,6 (value configured from Android App)
-volatile uint8_t ui8_hall_counter_offset_up = HALL_COUNTER_OFFSET_UP;
-// Hall counter offset for states 1,2,4 (value configured from Android App)
-volatile uint8_t ui8_hall_counter_offset_down = HALL_COUNTER_OFFSET_DOWN;
-// Phase angle shift (value configured in Android App)
-volatile uint8_t ui8_phase_angle_adj = 0;
+// Hall counter offset for states 6,2,3,1,5,4 (value configured from Android App)
+volatile uint8_t ui8_hall_counter_offsets[6] = {
+        HALL_COUNTER_OFFSET_UP,
+        HALL_COUNTER_OFFSET_DOWN,
+        HALL_COUNTER_OFFSET_UP,
+        HALL_COUNTER_OFFSET_DOWN,
+        HALL_COUNTER_OFFSET_UP,
+        HALL_COUNTER_OFFSET_DOWN};
 
 // Hall offset for current Hall state
 static uint8_t ui8_hall_counter_offset;
@@ -250,7 +252,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
                 ui8_hall_360_ref_valid = 0x03;
                 ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[3]; // Rotor at 210 deg
                 // set hall counter offset for rotor interpolation based on current hall state
-                ui8_hall_counter_offset = ui8_hall_counter_offset_down;
+                ui8_hall_counter_offset = ui8_hall_counter_offsets[3];
                 ui16_hall_360_ref = ui16_b;
                 // calculate hall ticks between the last two Hall transitions (for Hall calibration)
                 ui16_hall_calib_cnt[3] = ui16_hall_360_ref - ui16_hall_60_ref_old;
@@ -259,28 +261,28 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
                     case 0x02:
                         ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[1]; // Rotor at 90 deg
                         // set hall counter offset for rotor interpolation based on current hall state
-                        ui8_hall_counter_offset = ui8_hall_counter_offset_down;
+                        ui8_hall_counter_offset = ui8_hall_counter_offsets[1];
                         // calculate hall ticks between the last two Hall transitions (for Hall calibration)
                         ui16_hall_calib_cnt[1] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     case 0x03:
                         ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[2]; // Rotor at 150 deg
-                        ui8_hall_counter_offset = ui8_hall_counter_offset_up;
+                        ui8_hall_counter_offset = ui8_hall_counter_offsets[2];
                         ui16_hall_calib_cnt[2] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     case 0x04:
                         ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[5]; // Rotor at 330 deg
-                        ui8_hall_counter_offset = ui8_hall_counter_offset_down;
+                        ui8_hall_counter_offset = ui8_hall_counter_offsets[5];
                         ui16_hall_calib_cnt[5] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     case 0x05:
                         ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[4]; // Rotor at 270 deg
-                        ui8_hall_counter_offset = ui8_hall_counter_offset_up;
+                        ui8_hall_counter_offset = ui8_hall_counter_offsets[4];
                         ui16_hall_calib_cnt[4] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     case 0x06:
                         ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[0]; // Rotor at 30 deg
-                        ui8_hall_counter_offset = ui8_hall_counter_offset_up;
+                        ui8_hall_counter_offset = ui8_hall_counter_offsets[0];
                         ui16_hall_calib_cnt[0] = ui16_b - ui16_hall_60_ref_old;
                         break;
                     default:
@@ -338,7 +340,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             } while (--ui8_cnt);
         }
         // we need to put phase voltage 90 degrees ahead of rotor position, to get current 90 degrees ahead and have max torque per amp
-        ui8_svm_table_index = ui8_temp + ui8_motor_phase_absolute_angle + ui8_g_foc_angle + ui8_phase_angle_adj;
+        ui8_svm_table_index = ui8_temp + ui8_motor_phase_absolute_angle + ui8_g_foc_angle;
         */
         #ifndef __CDT_PARSER__ // disable Eclipse syntax check
         __asm
@@ -367,11 +369,10 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             jrne 00012$
             // now ui8_temp contains the interpolation angle
         00011$: // BLOCK_COMMUTATION
-            // ui8_temp = ui8_temp + ui8_motor_phase_absolute_angle + ui8_g_foc_angle + ui8_phase_angle_adj;
+            // ui8_temp = ui8_temp + ui8_motor_phase_absolute_angle + ui8_g_foc_angle;
             ld  a, _ui8_temp+0
             add a, _ui8_motor_phase_absolute_angle+0
             add a, _ui8_g_foc_angle+0
-            add a, _ui8_phase_angle_adj
             ld _ui8_temp, a
 
         // now ui8_temp contains ui8_svm_table_index

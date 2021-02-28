@@ -13,7 +13,7 @@
 //#define PWM_TIME_DEBUG
 //#define MAIN_TIME_DEBUG
 
-#define FW_VERSION 10
+#define FW_VERSION 11
 
 /*---------------------------------------------------------
  NOTE: regarding motor rotor offset
@@ -104,8 +104,8 @@ HALL_COUNTER_OFFSET_UP:   28 + 15 -> 43
 ****************************************
 */
 
-#define HALL_COUNTER_OFFSET_UP                  45
-#define HALL_COUNTER_OFFSET_DOWN                24
+#define HALL_COUNTER_OFFSET_UP                  44
+#define HALL_COUNTER_OFFSET_DOWN                23
 #define FW_HALL_COUNTER_OFFSET_MAX              6
 
 

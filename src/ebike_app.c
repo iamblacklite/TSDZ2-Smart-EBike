@@ -1380,8 +1380,12 @@ static void uart_receive_package(void) {
             // riding mode parameter
             ui8_riding_mode_parameter = ui8_rx_buffer[3];
 
-            // lights state
-            ui8_lights_state = ui8_rx_buffer[4];
+            // lights state & light configuration
+            ui8_lights_configuration = ui8_rx_buffer[4] & 0x7f;
+            if (ui8_rx_buffer[4] & 0x80)
+                ui8_lights_state = 1;
+            else
+                ui8_lights_state = 0;
 
             // message ID
             switch (ui8_rx_buffer[1]) {
@@ -1418,22 +1422,20 @@ static void uart_receive_package(void) {
 				break;
 
             case 1:
-                // Free for future use
-                // ui8_rx_buffer[5]
+                // free for future use
+                //ui8_rx_buffer[5]
+                //ui8_rx_buffer[6]
 
                 // wheel perimeter
-                m_configuration_variables.ui16_wheel_perimeter = (((uint16_t) ui8_rx_buffer[7]) << 8) + ((uint16_t) ui8_rx_buffer[6]);
+                m_configuration_variables.ui16_wheel_perimeter = (((uint16_t) ui8_rx_buffer[8]) << 8) + ((uint16_t) ui8_rx_buffer[7]);
 
                 // wheel max speed
-                m_configuration_variables.ui8_wheel_speed_max = ui8_rx_buffer[8];
+                m_configuration_variables.ui8_wheel_speed_max = ui8_rx_buffer[9];
 
                 // assist without pedal rotation threshold
-                ui8_assist_without_pedal_rotation_threshold = ui8_rx_buffer[9];
+                ui8_assist_without_pedal_rotation_threshold = ui8_rx_buffer[10];
                 // check if assist without pedal rotation threshold is valid (safety)
                 if (ui8_assist_without_pedal_rotation_threshold > 100) ui8_assist_without_pedal_rotation_threshold = 0;
-
-                // lights configuration
-                ui8_lights_configuration = ui8_rx_buffer[10];
             	break;
 
             case 2:
@@ -1487,24 +1489,20 @@ static void uart_receive_package(void) {
             	// Hall counter offset for angle interpolation calculated during Hall calibration
 				// When Hall is not calibrated the values are 0 and the default values are used
             	if (ui8_rx_buffer[5] != 0) {
-            		ui8_hall_counter_offset_up = ui8_rx_buffer[5];
-            		ui8_hall_counter_offset_down = ui8_rx_buffer[6];
+            	    ui8_hall_counter_offsets[0] = ui8_rx_buffer[5];
+                    ui8_hall_counter_offsets[1] = ui8_rx_buffer[6];
+                    ui8_hall_counter_offsets[2] = ui8_rx_buffer[7];
+                    ui8_hall_counter_offsets[3] = ui8_rx_buffer[8];
+                    ui8_hall_counter_offsets[4] = ui8_rx_buffer[9];
+                    ui8_hall_counter_offsets[5] = ui8_rx_buffer[10];
 				} else {
-					ui8_hall_counter_offset_up = HALL_COUNTER_OFFSET_UP;
-					ui8_hall_counter_offset_down = HALL_COUNTER_OFFSET_DOWN;
+				    ui8_hall_counter_offsets[0] = HALL_COUNTER_OFFSET_UP;
+				    ui8_hall_counter_offsets[1] = HALL_COUNTER_OFFSET_DOWN;
+                    ui8_hall_counter_offsets[2] = HALL_COUNTER_OFFSET_UP;
+                    ui8_hall_counter_offsets[3] = HALL_COUNTER_OFFSET_DOWN;
+                    ui8_hall_counter_offsets[4] = HALL_COUNTER_OFFSET_UP;
+                    ui8_hall_counter_offsets[5] = HALL_COUNTER_OFFSET_DOWN;
 				}
-
-                // Phase offset angle adjust
-                // Limit value to +/-10
-                if ((ui8_rx_buffer[7] < 11) || (ui8_rx_buffer[7] > 245))
-                    ui8_phase_angle_adj = ui8_rx_buffer[7];
-                else
-                    ui8_phase_angle_adj = 0;
-
-                // Free for future use
-                // ui8_rx_buffer[8]
-                // ui8_rx_buffer[9]
-                // ui8_rx_buffer[10]
             	break;
             }
         }
