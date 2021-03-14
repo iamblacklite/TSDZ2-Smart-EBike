@@ -13,7 +13,7 @@
 //#define PWM_TIME_DEBUG
 //#define MAIN_TIME_DEBUG
 
-#define FW_VERSION 11
+#define FW_VERSION 12
 
 /*---------------------------------------------------------
  NOTE: regarding motor rotor offset
@@ -71,6 +71,7 @@
 #define PWM_DUTY_CYCLE_MAX                                        254
 #define MIDDLE_SVM_TABLE                                          106
 #define MIDDLE_PWM_COUNTER                                        105
+#define PWM_DUTY_CYCLE_STARTUP                                    30    // Initial PWM Duty Cycle at motor startup
 
 
 /* Hall Sensors NOTE! - results after Hall sensor calibration experiment

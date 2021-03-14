@@ -401,17 +401,17 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             clrw x
             ld  xl, a
             ld  a, (_ui8_svm_table+0, x)
-            cp  a, #0x6a    // if (ui8_temp > MIDDLE_SVM_TABLE)
+            cp  a, #MIDDLE_SVM_TABLE    // if (ui8_temp > MIDDLE_SVM_TABLE)
             jrule   00020$
             // ui16_a = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
-            sub a, #0x6a
+            sub a, #MIDDLE_SVM_TABLE
             ld  xl, a
             ld  a, _ui8_g_duty_cycle+0
             mul x, a
             // ui16_a = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t) (ui16_a >> 8)) << 1;
             ld  a, xh
             clr _ui16_a+0
-            add a, #0x69
+            add a, #MIDDLE_PWM_COUNTER
             jrpl 00022$
             mov _ui16_a+0, #0x01  // result is negative (bit 7 is set)
         00022$:
@@ -421,7 +421,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
         00020$:             // } else {
             // ui16_a = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
             ld  _ui16_a+1, a
-            ld  a, #0x6a
+            ld  a, #MIDDLE_SVM_TABLE
             sub a, _ui16_a+1
             ld  xl, a
             ld  a, _ui8_g_duty_cycle+0
@@ -429,7 +429,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             // ui16_a = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_a >> 8)) << 1;
             ld  a, xh
             ld  _ui16_a+1, a
-            ld  a, #0x69
+            ld  a, #MIDDLE_PWM_COUNTER
             clr _ui16_a+0
             sub a, _ui16_a+1
             jrpl 00023$
@@ -455,17 +455,17 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             clrw x              // ui8_temp = ui8_svm_table[ui8_svm_table_index];
             ld  xl, a
             ld  a, (_ui8_svm_table+0, x)
-            cp  a, #0x6a    // if (ui8_temp > MIDDLE_SVM_TABLE)
+            cp  a, #MIDDLE_SVM_TABLE    // if (ui8_temp > MIDDLE_SVM_TABLE)
             jrule   00024$
             // ui16_b = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
-            sub a, #0x6a
+            sub a, #MIDDLE_SVM_TABLE
             ld  xl, a
             ld  a, _ui8_g_duty_cycle+0
             mul x, a
             // ui16_b = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t)(ui16_b >> 8)) << 1;
             ld  a, xh
             clr _ui16_b+0
-            add a, #0x69
+            add a, #MIDDLE_PWM_COUNTER
             jrpl 00026$
             mov _ui16_b+0, #0x01
         00026$:
@@ -475,7 +475,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
         00024$:             // } else {
             // ui16_b = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
             ld  _ui16_b+1, a
-            ld  a, #0x6a
+            ld  a, #MIDDLE_SVM_TABLE
             sub a, _ui16_b+1
             ld  xl, a
             ld  a, _ui8_g_duty_cycle+0
@@ -483,7 +483,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             // ui16_b = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_b >> 8)) << 1;
             ld  a, xh
             ld  _ui16_b+1, a
-            ld  a, #0x69
+            ld  a, #MIDDLE_PWM_COUNTER
             clr _ui16_b+0
             sub a, _ui16_b+1
             jrpl 00027$
@@ -510,17 +510,17 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             clrw x
             ld  xl, a
             ld  a, (_ui8_svm_table+0, x)
-            cp  a, #0x6a    // if (ui8_temp > MIDDLE_SVM_TABLE)
+            cp  a, #MIDDLE_SVM_TABLE    // if (ui8_temp > MIDDLE_SVM_TABLE)
             jrule   00028$
             // ui16_c = (uint16_t)((uint8_t)(ui8_temp - MIDDLE_SVM_TABLE) * (uint8_t)ui8_g_duty_cycle);
-            sub a, #0x6a
+            sub a, #MIDDLE_SVM_TABLE
             ld  xl, a
             ld  a, _ui8_g_duty_cycle+0
             mul x, a
             // ui16_c = (uint8_t)(MIDDLE_PWM_COUNTER + (uint8_t)(ui16_c >> 8)) << 1;
             ld  a, xh
             clr _ui16_c+0
-            add a, #0x69
+            add a, #MIDDLE_PWM_COUNTER
             jrpl 00030$
             mov _ui16_c+0, #0x01
         00030$:
@@ -530,7 +530,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
         00028$:             // } else {
             // ui16_c = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
             ld  _ui16_c+1, a
-            ld  a, #0x6a
+            ld  a, #MIDDLE_SVM_TABLE
             sub a, _ui16_c+1
             ld  xl, a
             ld  a, _ui8_g_duty_cycle+0
@@ -538,7 +538,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             // ui16_c = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_c >> 8)) << 1;
             ld  a, xh
             ld  _ui16_c+1, a
-            ld  a, #0x69
+            ld  a, #MIDDLE_PWM_COUNTER
             clr _ui16_c+0
             sub a, _ui16_c+1
             jrpl 00031$
@@ -995,23 +995,23 @@ uint8_t asin_table(uint8_t ui8_inverted_angle_x128) {
 }
 
 void motor_enable_pwm(void) {
-    TIM1_OC1Init(TIM1_OCMODE_PWM1, TIM1_OUTPUTSTATE_ENABLE, TIM1_OUTPUTNSTATE_ENABLE, 255, // initial duty_cycle value
+    TIM1_OC1Init(TIM1_OCMODE_PWM1, TIM1_OUTPUTSTATE_ENABLE, TIM1_OUTPUTNSTATE_ENABLE, 128, // initial duty_cycle value
             TIM1_OCPOLARITY_HIGH, TIM1_OCPOLARITY_HIGH, TIM1_OCIDLESTATE_RESET, TIM1_OCIDLESTATE_SET);
 
-    TIM1_OC2Init(TIM1_OCMODE_PWM1, TIM1_OUTPUTSTATE_ENABLE, TIM1_OUTPUTNSTATE_ENABLE, 255, // initial duty_cycle value
+    TIM1_OC2Init(TIM1_OCMODE_PWM1, TIM1_OUTPUTSTATE_ENABLE, TIM1_OUTPUTNSTATE_ENABLE, 128, // initial duty_cycle value
             TIM1_OCPOLARITY_HIGH, TIM1_OCPOLARITY_HIGH, TIM1_OCIDLESTATE_RESET, TIM1_OCIDLESTATE_SET);
 
-    TIM1_OC3Init(TIM1_OCMODE_PWM1, TIM1_OUTPUTSTATE_ENABLE, TIM1_OUTPUTNSTATE_ENABLE, 255, // initial duty_cycle value
+    TIM1_OC3Init(TIM1_OCMODE_PWM1, TIM1_OUTPUTSTATE_ENABLE, TIM1_OUTPUTNSTATE_ENABLE, 128, // initial duty_cycle value
             TIM1_OCPOLARITY_HIGH, TIM1_OCPOLARITY_HIGH, TIM1_OCIDLESTATE_RESET, TIM1_OCIDLESTATE_SET);
 }
 
 void motor_disable_pwm(void) {
-    TIM1_OC1Init(TIM1_OCMODE_PWM1, TIM1_OUTPUTSTATE_DISABLE, TIM1_OUTPUTNSTATE_DISABLE, 255, // initial duty_cycle value
+    TIM1_OC1Init(TIM1_OCMODE_PWM1, TIM1_OUTPUTSTATE_DISABLE, TIM1_OUTPUTNSTATE_DISABLE, 128, // initial duty_cycle value
             TIM1_OCPOLARITY_HIGH, TIM1_OCPOLARITY_HIGH, TIM1_OCIDLESTATE_RESET, TIM1_OCIDLESTATE_SET);
 
-    TIM1_OC2Init(TIM1_OCMODE_PWM1, TIM1_OUTPUTSTATE_DISABLE, TIM1_OUTPUTNSTATE_DISABLE, 255, // initial duty_cycle value
+    TIM1_OC2Init(TIM1_OCMODE_PWM1, TIM1_OUTPUTSTATE_DISABLE, TIM1_OUTPUTNSTATE_DISABLE, 128, // initial duty_cycle value
             TIM1_OCPOLARITY_HIGH, TIM1_OCPOLARITY_HIGH, TIM1_OCIDLESTATE_RESET, TIM1_OCIDLESTATE_SET);
 
-    TIM1_OC3Init(TIM1_OCMODE_PWM1, TIM1_OUTPUTSTATE_DISABLE, TIM1_OUTPUTNSTATE_DISABLE, 255, // initial duty_cycle value
+    TIM1_OC3Init(TIM1_OCMODE_PWM1, TIM1_OUTPUTSTATE_DISABLE, TIM1_OUTPUTNSTATE_DISABLE, 128, // initial duty_cycle value
             TIM1_OCPOLARITY_HIGH, TIM1_OCPOLARITY_HIGH, TIM1_OCIDLESTATE_RESET, TIM1_OCIDLESTATE_SET);
 }
