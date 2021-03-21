@@ -17,8 +17,6 @@ extern uint16_t ui16_cadence_ticks_count_min_speed_adj;
 
 // Torque sensor coaster brake engaged threshold value
 extern uint8_t ui8_adc_coaster_brake_threshold;
-extern uint16_t ui16_adc_pedal_torque_offset;
-
 
 typedef struct _configuration_variables {
     uint16_t ui16_battery_low_voltage_cut_off_x10;

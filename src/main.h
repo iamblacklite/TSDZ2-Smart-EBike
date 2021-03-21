@@ -31,7 +31,6 @@
 #define PHASE_ROTOR_ANGLE_270 (uint8_t)((uint8_t)192 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
 #define PHASE_ROTOR_ANGLE_330 (uint8_t)((uint8_t)235 + MOTOR_ROTOR_OFFSET_ANGLE - (uint8_t)64)
 
-
 // PWM related values
 // motor
 #define PWM_CYCLES_SECOND                                       19047U // 52us (PWM period)
@@ -75,27 +74,27 @@
 
 
 /* Hall Sensors NOTE! - results after Hall sensor calibration experiment
-Dai calcoli risulta che Trise - Tfall = 20 e cioè 80 us (1 Hall counter step e' 4us).
-Quindi Trise è molto più lungo di Tfall. Quindi le transizioni del sensore Hall vengono rilevate
+Dai calcoli risulta che Trise - Tfall = 20 e cioï¿½ 80 us (1 Hall counter step e' 4us).
+Quindi Trise ï¿½ molto piï¿½ lungo di Tfall. Quindi le transizioni del sensore Hall vengono rilevate
 con un ritardo diverso in funzione della transizione del segnale. Quindi gli stati 6,3,5 (fronte di
 salita) vengono rilevati con un ritardo di 80us (o 20 step) maggiore rispetto agli stati 2,1,4.
 Quindi negli stati 6,3,5 va sommato 20 (20x4us=80us) al contatore Hall usato per l'interpolazione,
-visto che è partito con 80us di ritardo rispetto agli altri stati. In questo modo
-il contatore Hall sarà allineato allo stesso modo per tutti gli stati, ma sarà comunque in ritardo
+visto che ï¿½ partito con 80us di ritardo rispetto agli altri stati. In questo modo
+il contatore Hall sarï¿½ allineato allo stesso modo per tutti gli stati, ma sarï¿½ comunque in ritardo
 di Tfall per tutti gli stati. Questo ritardo fisso viene gestito con un offset fisso da sommare
-al contatore. Questo spiega la necessità dell'offset fisso che si è reso necessario fino ad ora.
-Visto che il valore attuale dell'offset fisso è 18, si deve sommare 28 (20+8) agli stati 6,3,5
-e 8 agli stati 2,1,4 poichè (28+8)/2=18. Di questo 8 (8x4=32us), 6,5 (6,56*4=26,25us) servono a
+al contatore. Questo spiega la necessitï¿½ dell'offset fisso che si ï¿½ reso necessario fino ad ora.
+Visto che il valore attuale dell'offset fisso ï¿½ 18, si deve sommare 28 (20+8) agli stati 6,3,5
+e 8 agli stati 2,1,4 poichï¿½ (28+8)/2=18. Di questo 8 (8x4=32us), 6,5 (6,56*4=26,25us) servono a
 compensare il ritardo fisso fra la lettura del contatore Hall e l'applicazione delle fasi che
 avviene con un ritardo fisso pari a mezzo ciclo PWM (1/19047 = 52,5us, 52,5/2=26,25us).
-Purtroppo non c'è modo di calcolare i valori assoluti di Trise e Tfall utilizzando i contatori
+Purtroppo non c'ï¿½ modo di calcolare i valori assoluti di Trise e Tfall utilizzando i contatori
 Hall ma solo la differenza fra i due valori.
-In realtà sarebbe possibile misurando con precisionea la corrente a diverse velocità prestabilite
-del motore. Mantenedo fissa la velocità si fa variare il duty cycle, e l'offset del contatore hall
-e si trova il valore di offset per cui la corrente assorbita è minima per una data velocita.
+In realtï¿½ sarebbe possibile misurando con precisionea la corrente a diverse velocitï¿½ prestabilite
+del motore. Mantenedo fissa la velocitï¿½ si fa variare il duty cycle, e l'offset del contatore hall
+e si trova il valore di offset per cui la corrente assorbita ï¿½ minima per una data velocita.
 Facendo alcune rilevazioni e poi una regressione lineare, sarebbe poi possibile ottenere quali sono
 gli offset del contatore Hall e del'angolo della phase ottimali da applicare.
-Il problema è che la misura di corrente fornita dal controller è troppo grossolana e si dovrebbe
+Il problema ï¿½ che la misura di corrente fornita dal controller ï¿½ troppo grossolana e si dovrebbe
 usare uno strumento di precisione.
 ***************************************
 Test effettuato il 21/1/2012
@@ -114,7 +113,15 @@ HALL_COUNTER_OFFSET_UP:   28 + 15 -> 43
 
 // Torque sensor values
 #define ADC_TORQUE_SENSOR_CALIBRATION_OFFSET    6
-#define COASTER_BRAKE_TORQUE_THRESHOLD          40
+#define ADC_TORQUE_SENSOR_OFFSET_DEFAULT		150
+// adc torque offset gap value for error
+#define ADC_TORQUE_SENSOR_OFFSET_THRESHOLD		25
+// adc torque delta range value for remapping
+#define ADC_TORQUE_SENSOR_RANGE_MIN	  			160
+// scale the torque assist target current
+#define TORQUE_ASSIST_FACTOR_DENOMINATOR		110
+
+
 
 /*---------------------------------------------------------
  NOTE: regarding motor start interpolation

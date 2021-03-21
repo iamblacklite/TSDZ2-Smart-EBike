@@ -58,6 +58,7 @@ volatile uint8_t ui8_controller_adc_battery_current_target = 0;
 volatile uint8_t ui8_g_duty_cycle = 0;
 volatile uint8_t ui8_controller_duty_cycle_target = 0;
 volatile uint8_t ui8_g_foc_angle = 0;
+
 // Field Weakening Hall offset (added during interpolation)
 volatile uint8_t ui8_fw_hall_counter_offset = 0;
 
@@ -83,12 +84,12 @@ const static uint8_t ui8_pas_old_valid_state[4] = { 0x01, 0x03, 0x00, 0x02 };
 
 // wheel speed sensor
 volatile uint16_t ui16_wheel_speed_sensor_ticks = 0;
+volatile uint16_t ui16_wheel_speed_sensor_ticks_counter_min = 0;
 volatile uint32_t ui32_wheel_speed_sensor_ticks_total = 0;
 
 void read_battery_voltage(void);
 void calc_foc_angle(void);
 uint8_t asin_table(uint8_t ui8_inverted_angle_x128);
-
 
 
 void motor_controller(void) {
@@ -179,27 +180,6 @@ static uint8_t  ui8_hall_sensors_state_last = 7; // Invalid value, force executi
 // Hall counter value of last Hall transition
 static uint16_t ui16_hall_60_ref_old;
 
-// Hall Timer counter value calculated for the 6 different Hall transitions intervals
-volatile uint16_t ui16_hall_calib_cnt[6];
-
-// phase angle for rotor positions 30, 90, 150, 210, 270, 330 degrees
-volatile uint8_t ui8_hall_ref_angles[6] = {
-		PHASE_ROTOR_ANGLE_30,
-		PHASE_ROTOR_ANGLE_90,
-		PHASE_ROTOR_ANGLE_150,
-		PHASE_ROTOR_ANGLE_210,
-		PHASE_ROTOR_ANGLE_270,
-		PHASE_ROTOR_ANGLE_330};
-
-// Hall counter offset for states 6,2,3,1,5,4 (value configured from Android App)
-volatile uint8_t ui8_hall_counter_offsets[6] = {
-        HALL_COUNTER_OFFSET_UP,
-        HALL_COUNTER_OFFSET_DOWN,
-        HALL_COUNTER_OFFSET_UP,
-        HALL_COUNTER_OFFSET_DOWN,
-        HALL_COUNTER_OFFSET_UP,
-        HALL_COUNTER_OFFSET_DOWN};
-
 // Hall offset for current Hall state
 static uint8_t ui8_hall_counter_offset;
 
@@ -250,40 +230,32 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
                     ui8_motor_commutation_type = SINEWAVE_INTERPOLATION_60_DEGREES;
                 }
                 ui8_hall_360_ref_valid = 0x03;
-                ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[3]; // Rotor at 210 deg
+                ui8_motor_phase_absolute_angle = PHASE_ROTOR_ANGLE_210; // Rotor at 210 deg
                 // set hall counter offset for rotor interpolation based on current hall state
-                ui8_hall_counter_offset = ui8_hall_counter_offsets[3];
+                ui8_hall_counter_offset = HALL_COUNTER_OFFSET_DOWN;
                 ui16_hall_360_ref = ui16_b;
-                // calculate hall ticks between the last two Hall transitions (for Hall calibration)
-                ui16_hall_calib_cnt[3] = ui16_hall_360_ref - ui16_hall_60_ref_old;
             } else
                 switch (ui8_temp) {
                     case 0x02:
-                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[1]; // Rotor at 90 deg
+                        ui8_motor_phase_absolute_angle = PHASE_ROTOR_ANGLE_90; // Rotor at 90 deg
                         // set hall counter offset for rotor interpolation based on current hall state
-                        ui8_hall_counter_offset = ui8_hall_counter_offsets[1];
-                        // calculate hall ticks between the last two Hall transitions (for Hall calibration)
-                        ui16_hall_calib_cnt[1] = ui16_b - ui16_hall_60_ref_old;
+                        ui8_hall_counter_offset = HALL_COUNTER_OFFSET_DOWN;
                         break;
                     case 0x03:
-                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[2]; // Rotor at 150 deg
-                        ui8_hall_counter_offset = ui8_hall_counter_offsets[2];
-                        ui16_hall_calib_cnt[2] = ui16_b - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = PHASE_ROTOR_ANGLE_150; // Rotor at 150 deg
+                        ui8_hall_counter_offset = HALL_COUNTER_OFFSET_UP;
                         break;
                     case 0x04:
-                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[5]; // Rotor at 330 deg
-                        ui8_hall_counter_offset = ui8_hall_counter_offsets[5];
-                        ui16_hall_calib_cnt[5] = ui16_b - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = PHASE_ROTOR_ANGLE_330; // Rotor at 330 deg
+                        ui8_hall_counter_offset = HALL_COUNTER_OFFSET_DOWN;
                         break;
                     case 0x05:
-                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[4]; // Rotor at 270 deg
-                        ui8_hall_counter_offset = ui8_hall_counter_offsets[4];
-                        ui16_hall_calib_cnt[4] = ui16_b - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = PHASE_ROTOR_ANGLE_270; // Rotor at 270 deg
+                        ui8_hall_counter_offset = HALL_COUNTER_OFFSET_UP;
                         break;
                     case 0x06:
-                        ui8_motor_phase_absolute_angle = ui8_hall_ref_angles[0]; // Rotor at 30 deg
-                        ui8_hall_counter_offset = ui8_hall_counter_offsets[0];
-                        ui16_hall_calib_cnt[0] = ui16_b - ui16_hall_60_ref_old;
+                        ui8_motor_phase_absolute_angle = PHASE_ROTOR_ANGLE_30; // Rotor at 30 deg
+                        ui8_hall_counter_offset = HALL_COUNTER_OFFSET_UP;
                         break;
                     default:
                         return;
@@ -730,36 +702,44 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
 
         static uint16_t ui16_wheel_speed_sensor_ticks_counter;
         static uint8_t ui8_wheel_speed_sensor_ticks_counter_started;
+        static uint8_t ui8_wheel_speed_sensor_pin_state;
         static uint8_t ui8_wheel_speed_sensor_pin_state_old;
 
         // check wheel speed sensor pin state
-        ui8_temp = WHEEL_SPEED_SENSOR__PORT->IDR & WHEEL_SPEED_SENSOR__PIN;
+        ui8_wheel_speed_sensor_pin_state = WHEEL_SPEED_SENSOR__PORT->IDR & WHEEL_SPEED_SENSOR__PIN;
 
-        // check if wheel speed sensor pin state has changed
-        if (ui8_temp != ui8_wheel_speed_sensor_pin_state_old) {
-            // update old wheel speed sensor pin state
-            ui8_wheel_speed_sensor_pin_state_old = ui8_temp;
+        // check wheel speed sensor ticks counter min value
+		if(ui16_wheel_speed_sensor_ticks) { ui16_wheel_speed_sensor_ticks_counter_min = ui16_wheel_speed_sensor_ticks >> 3; }
+		else { ui16_wheel_speed_sensor_ticks_counter_min = WHEEL_SPEED_SENSOR_TICKS_COUNTER_MIN >> 3; }
 
-            // only consider the 0 -> 1 transition
-            if (ui8_temp) {
-                // check if first transition
-                if (!ui8_wheel_speed_sensor_ticks_counter_started) {
-                    // start wheel speed sensor ticks counter as this is the first transition
-                    ui8_wheel_speed_sensor_ticks_counter_started = 1;
-                } else {
-                    // check if wheel speed sensor ticks counter is out of bounds
-                    if (ui16_wheel_speed_sensor_ticks_counter < WHEEL_SPEED_SENSOR_TICKS_COUNTER_MAX) {
-                        ui16_wheel_speed_sensor_ticks = 0;
-                        ui16_wheel_speed_sensor_ticks_counter = 0;
-                        ui8_wheel_speed_sensor_ticks_counter_started = 0;
-                    } else {
-                        ui16_wheel_speed_sensor_ticks = ui16_wheel_speed_sensor_ticks_counter;
-                        ui16_wheel_speed_sensor_ticks_counter = 0;
-                        ++ui32_wheel_speed_sensor_ticks_total;
-                    }
-                }
-            }
-        }
+		if(!ui8_wheel_speed_sensor_ticks_counter_started ||
+		  (ui16_wheel_speed_sensor_ticks_counter > ui16_wheel_speed_sensor_ticks_counter_min)) {  
+			// check if wheel speed sensor pin state has changed
+			if (ui8_wheel_speed_sensor_pin_state != ui8_wheel_speed_sensor_pin_state_old) {
+				// update old wheel speed sensor pin state
+				ui8_wheel_speed_sensor_pin_state_old = ui8_wheel_speed_sensor_pin_state;
+
+				// only consider the 0 -> 1 transition
+				if (ui8_wheel_speed_sensor_pin_state) {
+					// check if first transition
+					if (!ui8_wheel_speed_sensor_ticks_counter_started) {
+						// start wheel speed sensor ticks counter as this is the first transition
+						ui8_wheel_speed_sensor_ticks_counter_started = 1;
+					} else {
+						// check if wheel speed sensor ticks counter is out of bounds
+						if (ui16_wheel_speed_sensor_ticks_counter < WHEEL_SPEED_SENSOR_TICKS_COUNTER_MAX) {
+							ui16_wheel_speed_sensor_ticks = 0;
+							ui16_wheel_speed_sensor_ticks_counter = 0;
+							ui8_wheel_speed_sensor_ticks_counter_started = 0;
+						} else {
+							ui16_wheel_speed_sensor_ticks = ui16_wheel_speed_sensor_ticks_counter;
+							ui16_wheel_speed_sensor_ticks_counter = 0;
+							++ui32_wheel_speed_sensor_ticks_total;
+						}
+					}
+				}
+			}
+		}
 
         // increment and also limit the ticks counter
         if (ui8_wheel_speed_sensor_ticks_counter_started)
@@ -890,7 +870,7 @@ void hall_sensor_init(void) {
 }
 
 void read_battery_voltage(void) {
-#define READ_BATTERY_VOLTAGE_FILTER_COEFFICIENT   2
+#define READ_BATTERY_VOLTAGE_FILTER_COEFFICIENT   3
 
     /*---------------------------------------------------------
      NOTE: regarding filter coefficients
