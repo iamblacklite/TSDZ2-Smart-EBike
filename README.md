@@ -1,6 +1,8 @@
-# BT Interface for TSDZ2 Open Source Firmware
+# TSDZ2 Open Source Firmware v20.1C.V12
 
-This reposiitory contains the source files of the ebike motor controller of the Tongsheng TSDZ2 mid drive motor.
+This fork is based on TSDZ2-ESP32 v12 by mspider65 and the v0.20C for 860C by mbrusa. 
 
-Wiki page at 
-[wiki](https://github.com/TSDZ-ESP32/TSDZ-ESP32-wiki/wiki)
+https://github.com/emmebrusa/TSDZ2-Smart-EBike-860C
+
+https://github.com/TSDZ2-ESP32/TSDZ2-Smart-EBike
+
