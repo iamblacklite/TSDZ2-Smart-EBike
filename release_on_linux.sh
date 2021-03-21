@@ -13,14 +13,11 @@ if [ ! -d "$RELEASE_FOLDER" ]; then
   # create folder
 	mkdir -p $RELEASE_FOLDER
 
-	cd src/controller
-      make -f Makefile_linux
-	cp main.hex $RELEASE_FOLDER/TSDZ2-v$VERSION.hex
+	cd src
+	make clean
+        make -f Makefile
+	cp main.ihx $RELEASE_FOLDER/TSDZ2-v$VERSION.hex
 	cd ../..
-
-	cd src/display/KT-LCD3
-    	make -f Makefile_linux
-	cp main.hex $RELEASE_FOLDER/KT-LCD3-v$VERSION.hex
 
 	echo Done! Find the files on: $RELEASE_FOLDER
 else
