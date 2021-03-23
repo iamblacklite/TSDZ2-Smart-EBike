@@ -20,9 +20,9 @@ void timer3_init(void);
 void timer4_init(void);
 
 void timers_init() {
-    timer2_init();
-    timer3_init();
-    timer4_init();
+     timer2_init();
+     timer3_init();
+     timer4_init();
 }
 
 // Timer2 is used to create the pulse signal for excitation of the torque sensor circuit
