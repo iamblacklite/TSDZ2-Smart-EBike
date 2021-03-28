@@ -122,6 +122,7 @@ static uint8_t ui8_hybrid_torque_parameter = 0;
 
 // wheel speed sensor
 static uint16_t ui16_wheel_speed_x10 = 0;
+static uint16_t ui16_wheel_calc_const;
 
 // throttle control
 volatile uint8_t ui8_throttle_adc = 0;
@@ -360,11 +361,8 @@ static uint16_t ui16_wheel_speed_target_received_x10 = 0;
 
 // startup boost
 static uint8_t ui8_startup_boost_enabled = 0;
-static uint16_t ui16_startup_boost_factor_array[120];
+static uint8_t ui8_startup_boost_factor_array[120];
 static uint8_t ui8_startup_boost_cadence_step = 0;
-
-// controller counter
-static uint8_t ui8_counter;
 
 // UART
 #define UART_NUMBER_DATA_BYTES_TO_RECEIVE   88  
@@ -431,21 +429,16 @@ void ebike_app_controller(void) {
 
     // check if there are any errors for motor control
     check_system();
+
+    // check if brake pulled
     check_brakes();
 
-	// send/receive data every 2 cycles (25ms * 2)
-	// control external lights every 2 cycles (25ms * 2)
-	static uint8_t ui8_counter;
-	
-	switch (ui8_counter++ & 0x01) {
-		case 0: 
-			communications_controller();
-			break;
-		case 1:
-			ebike_control_lights();
-			break;
-    }
-
+    // get data to use for motor control and also send new data
+	communications_controller(); 
+    
+    // use received data and sensor input to control external lights  
+    ebike_control_lights();      		
+			
     // use received data and sensor input to control motor
     ebike_control_motor();
 
@@ -572,7 +565,7 @@ static void ebike_control_motor(void) {
         ui8_motor_enabled = 0;
         motor_disable_pwm();
     } else if (!ui8_motor_enabled
-            && (ui16_motor_speed_erps < 50) // enable the motor only if it rotates slowly or is stopped
+            && (ui16_motor_speed_erps < 30) // enable the motor only if it rotates slowly or is stopped
             && (ui8_adc_battery_current_target)
             && (!ui8_brakes_engaged)) {
         ui8_motor_enabled = 1;
@@ -592,8 +585,8 @@ static void apply_power_assist()
     // pedal torque delta + startup boost in power assist mode
 	if(ui8_startup_boost_enabled && (ui8_pedal_cadence_RPM <= 120)) {
 		// calculate startup boost torque & new pedal torque delta
-		uint32_t ui32_temp = ((uint32_t)(ui16_adc_pedal_torque_delta * ui16_startup_boost_factor_array[ui8_pedal_cadence_RPM])) / 100;
-		ui16_adc_pedal_torque_power_mode = (uint16_t)ui32_temp + ui16_adc_pedal_torque_delta;
+		uint16_t ui16_temp = (uint16_t)((uint8_t)(ui16_adc_pedal_torque_delta) * ui8_startup_boost_factor_array[ui8_pedal_cadence_RPM]) / 50;
+		ui16_adc_pedal_torque_power_mode = ui16_temp + ui16_adc_pedal_torque_delta;
 	} else {
         ui16_adc_pedal_torque_power_mode = ui16_adc_pedal_torque_delta;
     }
@@ -1205,7 +1198,7 @@ static void apply_temperature_limiting()
     ui16_adc_motor_temperature_filtered = filter(ui16_temp, ui16_adc_motor_temperature_filtered, 8);
 
     // convert ADC value
-    ui16_motor_temperature_filtered_x10 = ((uint32_t) ui16_adc_motor_temperature_filtered * 10000) / 2048;
+    ui16_motor_temperature_filtered_x10 = (ui16_adc_motor_temperature_filtered * 39) / 8;
 
     // min temperature value can not be equal or higher than max temperature value
     if (ui8_motor_temperature_min_value_to_limit >= ui8_motor_temperature_max_value_to_limit) {
@@ -1236,11 +1229,11 @@ static void calc_wheel_speed(void)
 {
     // calc wheel speed (km/h*10)
     if (ui16_wheel_speed_sensor_ticks) {
-        uint16_t ui16_tmp = ui16_wheel_speed_sensor_ticks;
+        uint16_t ui16_tmp = ui16_wheel_speed_sensor_ticks >> 5;
         // rps = PWM_CYCLES_SECOND / ui16_wheel_speed_sensor_ticks (rev/sec)
         // km/h*10 = rps * ui16_wheel_perimeter * ((3600 / (1000 * 1000)) * 10)
         // !!!warning if PWM_CYCLES_SECOND is not a multiple of 1000
-        ui16_wheel_speed_x10 = (uint16_t)(((uint32_t) m_configuration_variables.ui16_wheel_perimeter * ((PWM_CYCLES_SECOND/1000)*36U)) / ui16_tmp);
+        ui16_wheel_speed_x10 =  ui16_wheel_calc_const / ui16_tmp;
     } else {
         ui16_wheel_speed_x10 = 0;
     }
@@ -1345,7 +1338,7 @@ static void get_pedal_torque(void)
 		// adc pedal torque delta remapping
 		if((ui8_torque_sensor_calibration_enabled) &&
 		   (ui16_adc_pedal_torque_range < ADC_TORQUE_SENSOR_RANGE_MIN)) {
-			ui16_adc_pedal_torque_delta = ((ui16_adc_pedal_torque_delta * ADC_TORQUE_SENSOR_RANGE_MIN) / ui16_adc_pedal_torque_range);
+			ui16_adc_pedal_torque_delta = (uint16_t)(ui16_adc_pedal_torque_delta * ADC_TORQUE_SENSOR_RANGE_MIN) / ui16_adc_pedal_torque_range;
 		}
 	}
 	else {
@@ -1672,6 +1665,7 @@ static void communications_controller(void)
 				ui8_m_motor_init_state = MOTOR_INIT_STATE_NO_INIT;
 
 			ui8_frame_type_to_send = ui8_rx_buffer[2];
+            
 			communications_process_packages(ui8_frame_type_to_send);
 		}
 		else
@@ -1686,8 +1680,8 @@ static void communications_controller(void)
 	}
 
 	// check for communications fail or display master fail
-	// can't fail more then 1000ms ??? 20 * 50ms
-	if (ui8_comm_error_counter > 20)
+	// can't fail more then 1000ms ??? 40 * 25ms
+	if (ui8_comm_error_counter > 40)
 	{
 		motor_disable_pwm();
 		ui8_motor_enabled = 0;
@@ -1886,6 +1880,7 @@ static void communications_process_packages(uint8_t ui8_frame_type)
 
 		// wheel perimeter
 		m_configuration_variables.ui16_wheel_perimeter = (((uint16_t) ui8_rx_buffer[6]) << 8) + ((uint16_t) ui8_rx_buffer[5]);
+        ui16_wheel_calc_const = (uint16_t)((((uint32_t)m_configuration_variables.ui16_wheel_perimeter) * PWM_CYCLES_SECOND / 1000 * 36U) >> 5);
 
 		// battery max current
 		//ebike_app_set_battery_max_current(ui8_rx_buffer[7]);
@@ -1930,13 +1925,13 @@ static void communications_process_packages(uint8_t ui8_frame_type)
 		// startup motor power boost fade time
 		// m_config_vars.ui8_startup_motor_power_boost_fade_time = ui8_rx_buffer[11];
 		// startup boost
-		ui16_startup_boost_factor_array[0] = (uint16_t) ui8_rx_buffer[10] << 1;
+		ui8_startup_boost_factor_array[0] = ui8_rx_buffer[10];
 		ui8_startup_boost_cadence_step = ui8_rx_buffer[11];
 
 		for (ui8_i = 1; ui8_i < 120; ui8_i++)
 		{
-			ui16_temp = (ui16_startup_boost_factor_array[ui8_i - 1] * (uint16_t)ui8_startup_boost_cadence_step) >> 8;
-			ui16_startup_boost_factor_array[ui8_i] = ui16_startup_boost_factor_array[ui8_i - 1] - ui16_temp;	
+			ui8_temp = (ui8_startup_boost_factor_array[ui8_i - 1] * ui8_startup_boost_cadence_step) >> 8;
+			ui8_startup_boost_factor_array[ui8_i] = ui8_startup_boost_factor_array[ui8_i - 1] - ui8_temp;	
 		}
 
 		// motor over temperature min value limit
@@ -1958,8 +1953,6 @@ static void communications_process_packages(uint8_t ui8_frame_type)
 
 		// received target speed for cruise
 		ui16_wheel_speed_target_received_x10 = (uint16_t) (ui8_rx_buffer[15] * 10);
-
-
 
 		// Torque ADC offset set (Right ADC1, weight=0)
 		ui16_adc_pedal_torque_offset_fix = (((uint16_t) ui8_rx_buffer[51]) << 8) + ((uint16_t) ui8_rx_buffer[50]);

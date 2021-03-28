@@ -9,11 +9,12 @@
 #include "stm8s.h"
 #include "interrupts.h"
 
-volatile uint8_t ui8_tim4_counter = 0;
-
 #ifdef __CDT_PARSER__
 #define __interrupt(x)
 #endif
+
+volatile uint8_t ui8_ebike_app_controller_counter = 0;
+volatile uint8_t ui8_motor_controller_counter = 0;
 
 void timer2_init(void);
 void timer3_init(void);
@@ -86,7 +87,8 @@ void timer4_init(void) {
 
 // TIM4 Overflow Interrupt handler
 void TIM4_IRQHandler(void) __interrupt(TIM4_OVF_IRQHANDLER) {
-    ui8_tim4_counter++;
+    ui8_motor_controller_counter++;
+    ui8_ebike_app_controller_counter++;
     TIM4->SR1 = 0; // Reset interrupt flag
 }
 

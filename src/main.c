@@ -49,6 +49,10 @@ int main(void);
 #ifdef __CDT_PARSER__
 #define __interrupt(x)
 #endif
+
+extern uint8_t ui8_ebike_app_controller_counter;
+extern uint8_t ui8_motor_controller_counter;
+
 // PWM cycle interrupt (called every 64us)
 void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER);
 // UART Receive interrupt
@@ -72,9 +76,6 @@ uint8_t ui8_max_ebike_time = 0;
 #endif
 
 int main(void) {
-    uint8_t ui8_1ms_counter = 0;
-    uint16_t ui16_ebike_app_controller_counter = 0;
-    uint16_t ui16_motor_controller_counter = 0;
 
     // set clock at the max 16 MHz
     CLK_HSIPrescalerConfig(CLK_PRESCALER_HSIDIV1);
@@ -94,17 +95,17 @@ int main(void) {
     enableInterrupts();
 
     while (1) {
+
         // because of continue, the first if block code will have higher priority over the other
-        ui8_1ms_counter = ui8_tim4_counter;
         // run every 4ms. Max measured motor_controller() duration is 0,15ms
-        if ((ui8_1ms_counter - ui16_motor_controller_counter) > 4) {
+        if (ui8_motor_controller_counter > 4) {
 
             #ifdef MAIN_TIME_DEBUG
             // incremented every 50us by PWM interrupt function
             ui8_main_time = 0;
             #endif
 
-            ui16_motor_controller_counter = ui8_1ms_counter;
+            ui8_motor_controller_counter = 0;
             motor_controller();
 
             #ifdef MAIN_TIME_DEBUG
@@ -115,16 +116,15 @@ int main(void) {
             continue;
         }
 
-        ui8_1ms_counter = ui8_tim4_counter;
         // run every 25ms. Max measured ebike_app_controller() duration is 3,1 ms.
-        if ((ui8_1ms_counter - ui16_ebike_app_controller_counter) > 25) {
+        if (ui8_ebike_app_controller_counter > 25) {
 
             #ifdef MAIN_TIME_DEBUG
             // incremented every 50us by PWM interrupt function
             ui8_main_time = 0;
             #endif
 
-            ui16_ebike_app_controller_counter = ui8_1ms_counter;
+            ui8_ebike_app_controller_counter = 0;
             ebike_app_controller();
 
             #ifdef MAIN_TIME_DEBUG

@@ -702,11 +702,10 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
 
         static uint16_t ui16_wheel_speed_sensor_ticks_counter;
         static uint8_t ui8_wheel_speed_sensor_ticks_counter_started;
-        static uint8_t ui8_wheel_speed_sensor_pin_state;
         static uint8_t ui8_wheel_speed_sensor_pin_state_old;
 
         // check wheel speed sensor pin state
-        ui8_wheel_speed_sensor_pin_state = WHEEL_SPEED_SENSOR__PORT->IDR & WHEEL_SPEED_SENSOR__PIN;
+        ui8_temp = WHEEL_SPEED_SENSOR__PORT->IDR & WHEEL_SPEED_SENSOR__PIN;
 
         // check wheel speed sensor ticks counter min value
 		if(ui16_wheel_speed_sensor_ticks) { ui16_wheel_speed_sensor_ticks_counter_min = ui16_wheel_speed_sensor_ticks >> 3; }
@@ -715,12 +714,12 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
 		if(!ui8_wheel_speed_sensor_ticks_counter_started ||
 		  (ui16_wheel_speed_sensor_ticks_counter > ui16_wheel_speed_sensor_ticks_counter_min)) {  
 			// check if wheel speed sensor pin state has changed
-			if (ui8_wheel_speed_sensor_pin_state != ui8_wheel_speed_sensor_pin_state_old) {
+			if (ui8_temp != ui8_wheel_speed_sensor_pin_state_old) {
 				// update old wheel speed sensor pin state
-				ui8_wheel_speed_sensor_pin_state_old = ui8_wheel_speed_sensor_pin_state;
+				ui8_wheel_speed_sensor_pin_state_old = ui8_temp;
 
 				// only consider the 0 -> 1 transition
-				if (ui8_wheel_speed_sensor_pin_state) {
+				if (ui8_temp) {
 					// check if first transition
 					if (!ui8_wheel_speed_sensor_ticks_counter_started) {
 						// start wheel speed sensor ticks counter as this is the first transition
