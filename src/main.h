@@ -34,7 +34,7 @@
 // PWM related values
 // motor
 #define PWM_CYCLES_SECOND                                       19047U // 52us (PWM period)
-#define HALL_COUNTER_FREQ                                       250000U // 250kHz or 8us
+#define HALL_COUNTER_FREQ                                       250000U // 250kHz or 4us
 #define HALL_COUNTER_INTERP_MAX                                 4166U  // (HALL_COUNTER_FREQ/MOTOR_ROTOR_INTERPOLATION_MIN_ERPS/6)
 // ramp up/down PWM cycles count
 #define PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_CADENCE_OFFSET      50     // PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP offset for cadence assist mode
@@ -104,8 +104,8 @@ HALL_COUNTER_OFFSET_UP:   28 + 15 -> 43
 ****************************************
 */
 
-#define HALL_COUNTER_OFFSET_UP                  23
-#define HALL_COUNTER_OFFSET_DOWN                43
+#define HALL_COUNTER_OFFSET_UP                  43
+#define HALL_COUNTER_OFFSET_DOWN                23
 #define FW_HALL_COUNTER_OFFSET_MAX              6
 
 
