@@ -13,9 +13,6 @@
 #define __interrupt(x)
 #endif
 
-volatile uint8_t ui8_ebike_app_controller_counter = 0;
-volatile uint8_t ui8_motor_controller_counter = 0;
-
 void timer2_init(void);
 void timer3_init(void);
 void timer4_init(void);
@@ -52,7 +49,7 @@ void timer2_init(void) {
     }
 }
 
-// HALL sensor time counter (250 KHz, 4us period, 1deg resolution at max rotor speed of 660ERPS)
+// HALL sensor time counter (125 KHz, 8us period, 2deg resolution at max rotor speed of 660ERPS)
 // Counter is used to measure the time between Hall sensors transitions.
 // Hall sensor GPIO IRQ is used to read counter reference value at every Hall sensor transition
 void timer3_init(void) {
@@ -74,7 +71,7 @@ void timer4_init(void) {
     uint16_t ui16_i;
 
     TIM4_DeInit();
-    TIM4_TimeBaseInit(TIM4_PRESCALER_128, 0x7d); // Freq = 16MHz/128*125=1KHz (1ms)
+    TIM4_TimeBaseInit(TIM4_PRESCALER_128, 0xFA); // Freq = 16MHz/128*250 = 500Hz (2ms)
     ITC_SetSoftwarePriority(TIM4_OVF_IRQHANDLER, ITC_PRIORITYLEVEL_1); // 1 = lowest priority
     TIM4_ITConfig(TIM4_IT_UPDATE, ENABLE); // Enable Update/Overflow Interrupt (see below TIM4_IRQHandler function)
     TIM4_Cmd(ENABLE); // TIM4 counter enable
@@ -85,10 +82,5 @@ void timer4_init(void) {
     }
 }
 
-// TIM4 Overflow Interrupt handler
-void TIM4_IRQHandler(void) __interrupt(TIM4_OVF_IRQHANDLER) {
-    ui8_motor_controller_counter++;
-    ui8_ebike_app_controller_counter++;
-    TIM4->SR1 = 0; // Reset interrupt flag
-}
+
 

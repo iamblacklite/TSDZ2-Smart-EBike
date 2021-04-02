@@ -1,7 +1,7 @@
 /*
  * TongSheng TSDZ2 motor controller firmware/
  *
- * Copyright (C) Casainho, Leon, MSpider65 2020.
+ * Copyright (C) Casainho, Leon, MSpider65, Blacklite 2021
  *
  * Released under the GPL License, Version 3
  */
@@ -33,7 +33,7 @@ static const uint8_t ui8_svm_table[SVM_TABLE_LEN] = { 199, 200, 202, 203, 204, 2
         4, 5, 6, 6, 7, 8, 9, 10, 11, 12, 13, 16, 20, 24, 28, 32, 36, 40, 45, 49, 53, 58, 62, 66, 71, 75, 79, 84, 88, 93,
         97, 102, 106, 110, 115, 119, 124, 128, 133, 137, 141, 146, 150, 154, 159, 163, 167, 172, 176, 180, 184, 188,
         192, 196, 199, 200, 201, 202, 203, 204, 205, 206, 206, 207, 208, 208, 209, 210, 210, 211, 211, 211, 212, 212,
-        212, 212, 212, 212, 212, 212, 211, 211, 211, 210, 210, 209, 208, 208, 207, 206, 205, 204, 203, 202, 200, 199,
+        212, 212, 212, 212, 212, 212, 211, 211, 211, 210, 210, 209, 208, 208, 207, 206, 205, 204, 203, 202, 200, 199, 
         198 };
 
 static const uint8_t ui8_sin_table[SIN_TABLE_LEN] = { 3, 6, 9, 12, 16, 19, 22, 25, 28, 31, 34, 37, 40, 43, 46, 49, 52, 54, 57, 60,
@@ -47,6 +47,8 @@ static uint8_t ui8_motor_phase_absolute_angle;
 volatile uint16_t ui16_hall_counter_total = 0xffff;
 volatile uint16_t ui16_motor_speed_erps = 0;
 
+// controller loop variables
+volatile uint8_t ui8_ebike_app_controller_counter = 0;
 
 // power variables
 volatile uint8_t ui8_controller_duty_cycle_ramp_up_inverse_step = PWM_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_DEFAULT;
@@ -86,21 +88,6 @@ const static uint8_t ui8_pas_old_valid_state[4] = { 0x01, 0x03, 0x00, 0x02 };
 volatile uint16_t ui16_wheel_speed_sensor_ticks = 0;
 volatile uint16_t ui16_wheel_speed_sensor_ticks_counter_min = 0;
 volatile uint32_t ui32_wheel_speed_sensor_ticks_total = 0;
-
-void read_battery_voltage(void);
-void calc_foc_angle(void);
-uint8_t asin_table(uint8_t ui8_inverted_angle_x128);
-
-
-void motor_controller(void) {
-    if (((uint8_t)(ui16_hall_counter_total>>8)) & 0x80)
-        ui16_motor_speed_erps = 0;
-    else
-        // Reduce operands to 16 bit (Avoid slow _divulong() library function)
-        ui16_motor_speed_erps = (uint16_t)(HALL_COUNTER_FREQ >> 2) / (uint16_t)(ui16_hall_counter_total >> 2);
-    read_battery_voltage();
-    calc_foc_angle();
-}
 
 // Measures did with a 24V Q85 328 RPM motor, rotating motor backwards by hand:
 // Hall sensor A positivie to negative transition | BEMF phase B at max value / top of sinewave
@@ -262,6 +249,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
                 }
 
             // update last hall sensor state
+            /* is this code necessary???
             #ifndef __CDT_PARSER__ // disable Eclipse syntax check
             __asm
                 // speed optimization ldw, ldw -> mov,mov
@@ -270,6 +258,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
                 mov _ui16_hall_60_ref_old+1, _ui16_b+1
             __endasm;
             #endif
+            */
             ui8_hall_sensors_state_last = ui8_temp;
         } else {
             // Verify if rotor stopped (< 10 ERPS)
@@ -705,21 +694,21 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
         static uint8_t ui8_wheel_speed_sensor_pin_state_old;
 
         // check wheel speed sensor pin state
-        ui8_temp = WHEEL_SPEED_SENSOR__PORT->IDR & WHEEL_SPEED_SENSOR__PIN;
-
-        // check wheel speed sensor ticks counter min value
+        uint8_t ui8_wheel_speed_sensor_pin_state = WHEEL_SPEED_SENSOR__PORT->IDR & WHEEL_SPEED_SENSOR__PIN;
+		
+		// check wheel speed sensor ticks counter min value
 		if(ui16_wheel_speed_sensor_ticks) { ui16_wheel_speed_sensor_ticks_counter_min = ui16_wheel_speed_sensor_ticks >> 3; }
 		else { ui16_wheel_speed_sensor_ticks_counter_min = WHEEL_SPEED_SENSOR_TICKS_COUNTER_MIN >> 3; }
 
 		if(!ui8_wheel_speed_sensor_ticks_counter_started ||
 		  (ui16_wheel_speed_sensor_ticks_counter > ui16_wheel_speed_sensor_ticks_counter_min)) {  
 			// check if wheel speed sensor pin state has changed
-			if (ui8_temp != ui8_wheel_speed_sensor_pin_state_old) {
+			if (ui8_wheel_speed_sensor_pin_state != ui8_wheel_speed_sensor_pin_state_old) {
 				// update old wheel speed sensor pin state
-				ui8_wheel_speed_sensor_pin_state_old = ui8_temp;
+				ui8_wheel_speed_sensor_pin_state_old = ui8_wheel_speed_sensor_pin_state;
 
 				// only consider the 0 -> 1 transition
-				if (ui8_temp) {
+				if (ui8_wheel_speed_sensor_pin_state) {
 					// check if first transition
 					if (!ui8_wheel_speed_sensor_ticks_counter_started) {
 						// start wheel speed sensor ticks counter as this is the first transition
@@ -739,7 +728,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
 				}
 			}
 		}
-
+		
         // increment and also limit the ticks counter
         if (ui8_wheel_speed_sensor_ticks_counter_started)
             if (ui16_wheel_speed_sensor_ticks_counter < WHEEL_SPEED_SENSOR_TICKS_COUNTER_MIN) {
@@ -868,9 +857,21 @@ void hall_sensor_init(void) {
     EXTI_SetTLISensitivity(EXTI_TLISENSITIVITY_FALL_ONLY);
 }
 
-void read_battery_voltage(void) {
-#define READ_BATTERY_VOLTAGE_FILTER_COEFFICIENT   3
+// TIM4 Overflow Interrupt handler
+void TIM4_IRQHandler(void) __interrupt(TIM4_OVF_IRQHANDLER) {
+    // increment counter for main function loop
+    ui8_ebike_app_controller_counter++;
+    
+    // calculate motor erps
+    if (((uint8_t)(ui16_hall_counter_total>>8)) & 0x80) {
+        ui16_motor_speed_erps = 0;
+    } else {
+        // Reduce operands to 16 bit (Avoid slow _divulong() library function)
+        ui16_motor_speed_erps = (uint16_t)(HALL_COUNTER_FREQ >> 2) / (uint16_t)(ui16_hall_counter_total >> 2);
+    }
 
+    // read battery voltage
+    #define READ_BATTERY_VOLTAGE_FILTER_COEFFICIENT   4
     /*---------------------------------------------------------
      NOTE: regarding filter coefficients
 
@@ -878,99 +879,48 @@ void read_battery_voltage(void) {
      0 equals to no filtering and no delay, higher values
      will increase filtering but will also add a bigger delay.
      ---------------------------------------------------------*/
-
     static uint16_t ui16_adc_battery_voltage_accumulated;
-
     // low pass filter the voltage readed value, to avoid possible fast spikes/noise
     ui16_adc_battery_voltage_accumulated -= ui16_adc_battery_voltage_accumulated
             >> READ_BATTERY_VOLTAGE_FILTER_COEFFICIENT;
     ui16_adc_battery_voltage_accumulated += (uint16_t)(UI16_ADC_10_BIT_BATTERY_VOLTAGE);
     ui16_adc_battery_voltage_filtered = ui16_adc_battery_voltage_accumulated >> READ_BATTERY_VOLTAGE_FILTER_COEFFICIENT;
-}
 
-void calc_foc_angle(void) {
+    // calculate FOC
     static uint16_t ui16_foc_angle_accumulated;
-    uint16_t ui16_temp;
-    uint16_t ui16_e_phase_voltage;
-    uint16_t ui16_i_phase_current_x2;
-    uint16_t ui16_l_x1048576;
-    uint32_t ui32_w_angular_velocity_x16;
-    uint16_t ui16_iwl_128;
-
+   
     struct_configuration_variables *p_configuration_variables;
     p_configuration_variables = get_configuration_variables();
 
-    // FOC implementation by calculating the angle between phase current and rotor magnetic flux (BEMF)
-    // 1. phase voltage is calculate
-    // 2. I*w*L is calculated, where I is the phase current. L was a measured value for 48V motor.
-    // 3. inverse sin is calculated of (I*w*L) / phase voltage, were we obtain the angle
-    // 4. previous calculated angle is applied to phase voltage vector angle and so the
-    // angle between phase current and rotor magnetic flux (BEMF) is kept at 0 (max torque per amp)
+    uint16_t ui16_magic_number = p_configuration_variables->ui16_magic_foc_number;
+    
+    if ((ui8_g_duty_cycle > 50) || (ui8_adc_battery_current_filtered < 110) || (ui16_motor_speed_erps > 31) || (ui16_motor_speed_erps < 600)) {
+         
+         uint8_t ui8_temp1 = (uint8_t)((ui16_magic_number / ui8_g_duty_cycle));
+         uint16_t ui16_temp2 = ((uint8_t)(ui16_motor_speed_erps >> 2) * (ui8_adc_battery_current_filtered)) << 2;
+         uint8_t ui8_temp3 = ui16_temp2 / ui16_adc_battery_voltage_filtered;
+         uint8_t ui8_inverted_angle_x128 = (uint16_t)((ui8_temp1 * ui8_temp3)) / ui8_g_duty_cycle;
+    
+        // calc inverse sine
+        uint8_t ui8_index = 0;
+        while (ui8_index < SIN_TABLE_LEN) {
+            if (ui8_inverted_angle_x128 < ui8_sin_table[ui8_index])
+                break;
+        ui8_index++;
+        }
+        ui8_g_foc_angle = ui8_index;
 
-    // calc E phase voltage
-    ui16_temp = (uint8_t)BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X512 * ui8_g_duty_cycle;
-    ui16_e_phase_voltage = ((uint32_t)ui16_adc_battery_voltage_filtered * ui16_temp) >> 17;
-
-    // calc I phase current
-    if (ui8_g_duty_cycle > 10) {
-        ui16_temp = ui8_adc_battery_current_filtered * (uint8_t)BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X512;
-        ui16_i_phase_current_x2 = ui16_temp / ui8_g_duty_cycle;
     } else {
         ui8_g_foc_angle = 0;
-        goto skip_foc;
     }
 
-    // calc W angular velocity: erps * 6.3
-    // multiplication overflow if ui16_motor_speed_erps > 648 (65535/101) -> cast ui16_motor_speed_erps to uint32_t !!!!
-    ui32_w_angular_velocity_x16 = (uint32_t)ui16_motor_speed_erps * 101U;
-
-    // ---------------------------------------------------------------------------------------------------------------------
-    // NOTE: EXPERIMENTAL and may not be good for the brushless motor inside TSDZ2
-    // Original message from jbalat on 28.08.2018, about increasing the limits on 36 V motor -- please see that this seems to go over the recomended values
-    // The ui32_l_x1048576 = 105 is working well so give that a try if you have a 36 V motor.
-    // This is the minimum value that gives me 550 W of power when I have asked for 550 W at level 5 assist, > 36 km/hr
-    //
-    // Remember also to boost the max motor erps in main.h to get higher cadence
-    // #define MOTOR_OVER_SPEED_ERPS 700 // motor max speed, protection max value | 30 points for the sinewave at max speed
-    // ---------------------------------------------------------------------------------------------------------------------
-
-    // ---------------------------------------------------------------------------------------------------------------------
-    // 36 V motor: L = 76uH
-    // 48 V motor: L = 135uH
-    // ui32_l_x1048576 = 142; // 1048576 = 2^20 | 48V
-    // ui32_l_x1048576 = 84; // 1048576 = 2^20 | 36V
-    //
-    // ui32_l_x1048576 = 142 <--- THIS VALUE WAS verified experimentaly on 2018.07 to be near the best value for a 48V motor
-    // Test done with a fixed mechanical load, duty_cycle = 200 and 100 and measured battery current was 16 and 6 (10 and 4 amps)
-    // ---------------------------------------------------------------------------------------------------------------------
-    ui16_l_x1048576 = p_configuration_variables->ui8_motor_inductance_x1048576;
-
-    // calc IwL
-    ui16_iwl_128 = ((uint32_t)((uint32_t)ui16_i_phase_current_x2 * ui16_l_x1048576) * ui32_w_angular_velocity_x16 ) >> 18;
-
-    // calc FOC angle
-    ui8_g_foc_angle = asin_table(ui16_iwl_128 / ui16_e_phase_voltage);
-
-    skip_foc:
     // low pass filter FOC angle
     ui16_foc_angle_accumulated -= ui16_foc_angle_accumulated >> 4;
     ui16_foc_angle_accumulated += ui8_g_foc_angle;
     ui8_g_foc_angle = ui16_foc_angle_accumulated >> 4;
-}
 
-// calc asin also converts the final result to degrees
-uint8_t asin_table(uint8_t ui8_inverted_angle_x128) {
-    uint8_t ui8_index = 0;
-
-    while (ui8_index < SIN_TABLE_LEN) {
-        if (ui8_inverted_angle_x128 < ui8_sin_table[ui8_index])
-            break;
-
-        ui8_index++;
-    }
-
-    // first value of table is 0 so ui8_index will always increment to at least 1 and return 0
-    return ui8_index;
+    // Reset interrupt flag
+    TIM4->SR1 = 0; 
 }
 
 void motor_enable_pwm(void) {

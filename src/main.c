@@ -51,7 +51,6 @@ int main(void);
 #endif
 
 extern uint8_t ui8_ebike_app_controller_counter;
-extern uint8_t ui8_motor_controller_counter;
 
 // PWM cycle interrupt (called every 64us)
 void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER);
@@ -96,28 +95,8 @@ int main(void) {
 
     while (1) {
 
-        // because of continue, the first if block code will have higher priority over the other
-        // run every 4ms. Max measured motor_controller() duration is 0,15ms
-        if (ui8_motor_controller_counter > 4) {
-
-            #ifdef MAIN_TIME_DEBUG
-            // incremented every 50us by PWM interrupt function
-            ui8_main_time = 0;
-            #endif
-
-            ui8_motor_controller_counter = 0;
-            motor_controller();
-
-            #ifdef MAIN_TIME_DEBUG
-            if (ui8_main_time > ui8_max_motor_time)
-                ui8_max_motor_time = ui8_main_time;
-            #endif
-
-            continue;
-        }
-
-        // run every 25ms. Max measured ebike_app_controller() duration is 3,1 ms.
-        if (ui8_ebike_app_controller_counter > 25) {
+        // run every 50ms. Max measured ebike_app_controller() duration is 3,1 ms.
+        if (ui8_ebike_app_controller_counter > 24) {
 
             #ifdef MAIN_TIME_DEBUG
             // incremented every 50us by PWM interrupt function
