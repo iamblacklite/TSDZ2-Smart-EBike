@@ -11,6 +11,7 @@
 #include "stm8s.h"
 #include "common.h"
 
+/* function now never called
 int16_t map_ui16(int16_t x, int16_t in_min, int16_t in_max, int16_t out_min, int16_t out_max) {
     // if input min is smaller than output min, return the output min value
     if (x < in_min) {
@@ -32,6 +33,7 @@ int16_t map_ui16(int16_t x, int16_t in_min, int16_t in_max, int16_t out_min, int
         return (int16_t)(((int32_t)(x - in_min) * (out_max - out_min)) / (in_max - in_min)) + out_min;
     }
 }
+*/
 
 uint8_t map_ui8(uint8_t x, uint8_t in_min, uint8_t in_max, uint8_t out_min, uint8_t out_max) {
     // if input min is smaller than output min, return the output min value

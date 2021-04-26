@@ -36,7 +36,7 @@ ELF_SECTIONS_TO_REMOVE = -R DATA -R INITIALIZED -R SSEG -R .debug_line -R .debug
 	$(SDIR)/stm8s_tim1.c \
 	$(SDIR)/stm8s_tim2.c \
 	$(SDIR)/stm8s_tim3.c \
-	$(SDIR)/stm8s_tim4.c \
+    $(SDIR)/stm8s_tim4.c \
 	$(SDIR)/stm8s_exti.c \
 	$(SDIR)/stm8s_adc1.c \
 	$(SDIR)/stm8s_flash.c \
@@ -61,7 +61,7 @@ RELS = $(EXTRASRCS:.c=.rel)
 
 INCLUDES = -I$(IDIR) -I.
 CFLAGS = -m$(PLATFORM) -Ddouble=float --std-c99 --nolospre --opt-code-speed --peep-asm --peep-file peep.txt
-ELF_FLAGS = --out-fmt-ihx --debug
+ELF_FLAGS = --out-fmt-elf --debug
 LIBS = 
 
 # This just provides the conventional target name "all"; it is optional
@@ -71,9 +71,9 @@ all: $(PNAME)
 # How to build the overall program
 $(PNAME): $(MAINSRC) $(RELS)
 	$(CC) $(INCLUDES) $(CFLAGS) $(ELF_FLAGS) $(LIBS) $(MAINSRC) $(RELS)
-#	$(SIZE) $(PNAME).elf -A
-#	$(OBJCOPY) -O binary $(ELF_SECTIONS_TO_REMOVE) $(PNAME).elf $(PNAME).bin
-#	$(OBJCOPY) -O ihex $(ELF_SECTIONS_TO_REMOVE) $(PNAME).elf $(PNAME).hex
+	$(SIZE) $(PNAME).elf -A
+	$(OBJCOPY) -O binary $(ELF_SECTIONS_TO_REMOVE) $(PNAME).elf $(PNAME).bin
+	$(OBJCOPY) -O ihex $(ELF_SECTIONS_TO_REMOVE) $(PNAME).elf $(PNAME).hex
 
 # How to build any .rel file from its corresponding .c file
 # GNU would have you use a pattern rule for this, but that's GNU-specific

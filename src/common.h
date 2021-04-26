@@ -39,7 +39,7 @@
 #define TEMPERATURE_CONTROL                       1
 #define THROTTLE_CONTROL                          2
 
-int16_t map_ui16(int16_t x, int16_t in_min, int16_t in_max, int16_t out_min, int16_t out_max);
+// int16_t map_ui16(int16_t x, int16_t in_min, int16_t in_max, int16_t out_min, int16_t out_max);
 uint8_t map_ui8(uint8_t x, uint8_t in_min, uint8_t in_max, uint8_t out_max, uint8_t out_min);
 uint8_t ui8_max(uint8_t value_a, uint8_t value_b);
 uint8_t ui8_min(uint8_t value_a, uint8_t value_b);

@@ -48,7 +48,7 @@
 #define THROTTLE_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_DEFAULT        98     // 80 at 15.625KHz
 #define THROTTLE_DUTY_CYCLE_RAMP_UP_INVERSE_STEP_MIN            49     // 40 at 15.625KHz
 // cadence
-#define CADENCE_SENSOR_CALC_COUNTER_MIN                         4266   // 3500 at 15.625KHz
+#define CADENCE_SENSOR_CALC_COUNTER_MIN                         4050   // lower from 4266 slightly so no overflow when mapping in calc_cadence function (4050 >> 4 is less than 255) - originally 3500 at 15.625KHz
 #define CADENCE_SENSOR_TICKS_COUNTER_MIN_AT_SPEED               341    // 280 at 15.625KHz
 #define CADENCE_TICKS_STARTUP                                   7618   // ui16_cadence_sensor_ticks value for startup. About 7-8 RPM (6250 at 15.625KHz)
 #define CADENCE_SENSOR_STANDARD_MODE_SCHMITT_TRIGGER_THRESHOLD  426    // software based Schmitt trigger to stop motor jitter when at resolution limits (350 at 15.625KHz)
@@ -112,14 +112,14 @@ HALL_COUNTER_OFFSET_UP:   28 + 15 -> 43
 #define MOTOR_ROTOR_INTERPOLATION_MIN_ERPS      10
 
 // Torque sensor values
-#define ADC_TORQUE_SENSOR_CALIBRATION_OFFSET    6
-#define ADC_TORQUE_SENSOR_OFFSET_DEFAULT		150
+#define ADC_TORQUE_SENSOR_CALIBRATION_OFFSET    (uint8_t)6
+#define ADC_TORQUE_SENSOR_OFFSET_DEFAULT		(uint8_t)150
 // adc torque offset gap value for error
-#define ADC_TORQUE_SENSOR_OFFSET_THRESHOLD		35
+#define ADC_TORQUE_SENSOR_OFFSET_THRESHOLD		(uint8_t)35
 // adc torque delta range value for remapping
-#define ADC_TORQUE_SENSOR_RANGE_MIN	  			160U
+#define ADC_TORQUE_SENSOR_RANGE_MIN	  			(uint8_t)150
 // scale the torque assist target current
-#define TORQUE_ASSIST_FACTOR_DENOMINATOR		110
+#define TORQUE_ASSIST_FACTOR_DENOMINATOR		(uint8_t)110
 
 
 
@@ -204,9 +204,19 @@ HALL_COUNTER_OFFSET_UP:   28 + 15 -> 43
 // ADC battery current measurement
 #define BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X512                  80
 #define BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X100                  16   // 0.16A x 10 bit ADC step
-#define BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X50                   8
 
-// new FOC constants
+// Max power to current step calculation
+/* uint8_t ui8_adc_battery_current_max_temp_2 = ui32_battery_current_max_x100 / BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X100;
+uint32_t ui32_battery_current_max_x100 = m_configuration_variables.ui8_target_battery_max_power_div25 * 2500000
+					/ ui16_battery_voltage_filtered_x1000;
+ui16_battery_voltage_filtered_x1000 = ui16_adc_battery_voltage_filtered * BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X1000;
+simplifiy to
+uint8_t ui8_adc_battery_current_max_temp_2 = (m_configuration_variables.ui8_target_battery_max_power_div25 * MAX_POWER_CALC_CONST) / ui16_adc_battery_voltage_filtered                                             
+MAX_POWER_CALC_CONST = 2500000 / (BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X1000 * BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X100) 
+to avoid overflow max value of MAX_POWER_CALC_CONST is 255, so divide constant by 8 and divide voltage by 8 in calculation */
+#define MAX_POWER_CALC_CONST_DIV8                                 224U
+
+// new FOC constants - speed up calculations
 #define MAGIC_FOC_36V                                             (uint16_t)7345U    // (80 * BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X512 * 101 / BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X512) >> 1
 #define MAGIC_FOC_48V                                             (uint16_t)13000U   // (142 * BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X512 * 101 / BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X512) >> 1
 
