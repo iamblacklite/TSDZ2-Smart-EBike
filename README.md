@@ -6,3 +6,7 @@ https://github.com/emmebrusa/TSDZ2-Smart-EBike-860C
 
 https://github.com/TSDZ2-ESP32/TSDZ2-Smart-EBike
 
+This motor firmware needs the adjustded display code in this repository
+https://github.com/iamblacklite/Color_LCD_860C
+
+
