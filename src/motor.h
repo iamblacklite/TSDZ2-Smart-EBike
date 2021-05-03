@@ -44,9 +44,11 @@ extern volatile uint32_t ui32_crank_revolutions_x20;
 extern volatile uint16_t ui16_wheel_speed_sensor_ticks;
 extern volatile uint32_t ui32_wheel_speed_sensor_ticks_total;
 
+// main loop TIM4 variable counters
+extern volatile uint8_t ui8_ebike_controller_counter;
+
 void hall_sensor_init(void); // must be called before using the motor
 void motor_enable_pwm(void);
 void motor_disable_pwm(void);
-void motor_controller(void);
 
 #endif /* _MOTOR_H_ */

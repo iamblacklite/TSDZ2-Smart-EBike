@@ -72,9 +72,6 @@ uint8_t ui8_max_motor_time = 0;
 uint8_t ui8_max_ebike_time = 0;
 #endif
 
-uint16_t ui8_motor_controller_counter = 0;
-uint16_t ui8_ebike_controller_counter = 0;
-
 int main(void) {
     
     // set clock at the max 16 MHz
@@ -95,21 +92,10 @@ int main(void) {
     enableInterrupts();
 
     while (1) {
-        // read timer counters - cannot read directly or priority doesn't work
-        ui8_motor_controller_counter = ui8_tim4_motor_counter;
-        ui8_ebike_controller_counter = ui8_tim4_ebike_counter;
-        // motor controller - run every 4ms (TIM4 counter @ 2ms)
-        if (ui8_motor_controller_counter > 2) {
-            // reset counter
-            ui8_tim4_motor_counter = 0;
-            // run controller function
-            motor_controller();
-            continue; // give priority
-        }
         // ebike controller - run every 50ms (TIM4 counter @ 2ms)
         if (ui8_ebike_controller_counter > 25) {
             // reset counter
-            ui8_tim4_ebike_counter = 0;
+            ui8_ebike_controller_counter = 0;
             // run controller function
             ebike_app_controller();
         }

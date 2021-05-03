@@ -10,7 +10,6 @@ replace restart {
 	dec %1
 }
 
-
 // -----------------------------------------------------------------------------
 // REMOVE USELESS LD a
 // 1 cycle and 2 bytes less

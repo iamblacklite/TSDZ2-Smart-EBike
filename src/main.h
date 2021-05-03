@@ -104,7 +104,7 @@ HALL_COUNTER_OFFSET_UP:   28 + 15 -> 43
 ****************************************
 */
 
-#define HALL_COUNTER_OFFSET_UP                  43
+#define HALL_COUNTER_OFFSET_UP                  44
 #define HALL_COUNTER_OFFSET_DOWN                23
 #define FW_HALL_COUNTER_OFFSET_MAX              6
 

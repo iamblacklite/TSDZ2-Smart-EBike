@@ -85,11 +85,5 @@ void timer4_init(void) {
     }
 }
 
-void TIM4_IRQHandler(void) __interrupt(TIM4_OVF_IRQHANDLER) {
-    // increment counter for controller loop
-    ui8_tim4_motor_counter++;
-    ui8_tim4_ebike_counter++;
-    // Reset interrupt flag
-    TIM4->SR1 = 0;
-}
+
 

@@ -42,6 +42,9 @@ uint8_t ui8_asin_table[ASIN_TABLE_LEN] = {0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3, 4,
    30, 30, 31, 31, 32, 32, 33, 33, 33, 34, 34, 35, 35, 36, 36, 37, 38, 38, 39, 39, 40, 40, 41, 42, 42, 43, 43, 44,
     45, 46, 46, 47, 48, 49, 50, 51, 52, 53, 54, 56, 58, 59};
 
+// controller counter
+volatile uint8_t ui8_ebike_controller_counter = 0;
+
 // motor variables
 uint8_t ui8_hall_360_ref_valid = 0;
 uint8_t ui8_motor_commutation_type = BLOCK_COMMUTATION;
@@ -190,10 +193,10 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             mov _ui8_temp+0, _ui8_hall_state_irq+0
             mov _ui16_b+0, _ui8_hall_60_ref_irq+0
             mov _ui16_b+1, _ui8_hall_60_ref_irq+1
-            pop cc              // enable interrupts (restores previous value of Interrupt mask)
-                                // Hall GPIO buffered interrupt could fire now
             mov _ui16_a+0, 0x5328 // TIM3->CNTRH
             mov _ui16_a+1, 0x5329 // TIM3->CNTRL
+            pop cc              // enable interrupts (restores previous value of Interrupt mask)
+                                // Hall GPIO buffered interrupt could fire now
         __endasm;
         #endif
         // ui8_temp stores the current Hall sensor state
@@ -289,11 +292,11 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             // Faster implementation of the above operation based on the following assumptions:
             // 1) ui16_a < 8192 (only 13 of 16 significants bits)
             // 2) LSB of (ui16_a << 8) is obviously 0x00
-            // 3) The result to should be less than 64 (90 degrees)
-            uint8_t ui8_cnt = 6; //max 6 loops: result < 64
+            // 3) The result to should be less than 60 degrees. Use 180 deg (value of 128) to be safe.
+            uint8_t ui8_cnt = 7; //max 6 loops: result < 128
             // Add Field Weakening counter offset (fw angle increases with rotor speed)
             // ui16_a - ui16_b = Hall counter ticks from the last Hall sensor transition;
-            ui16_a = ((uint8_t)(ui8_fw_hall_counter_offset + ui8_hall_counter_offset) + (ui16_a - ui16_b)) << 2;
+            ui16_a = ((uint8_t)(ui8_fw_hall_counter_offset + ui8_hall_counter_offset) + (ui16_a - ui16_b)) << 1;
 
             do {
                 ui16_a <<= 1;
@@ -320,8 +323,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             addw    x, _ui16_a+0
             subw    x, _ui16_b+0
             sllw x
-            sllw x
-            mov _ui16_b+0, #6
+            mov _ui16_b+0, #7
         00012$:
             sllw x
             sll  _ui8_temp+0
@@ -385,18 +387,16 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             jra 00021$
         00020$:             // } else {
             // ui16_a = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
-            ld  _ui16_a+1, a
-            ld  a, #MIDDLE_SVM_TABLE
-            sub a, _ui16_a+1
+            sub a, #MIDDLE_SVM_TABLE
+            neg a
             ld  xl, a
             ld  a, _ui8_g_duty_cycle+0
             mul x, a
             // ui16_a = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_a >> 8)) << 1;
             ld  a, xh
-            ld  _ui16_a+1, a
-            ld  a, #MIDDLE_PWM_COUNTER
+            sub a, #MIDDLE_PWM_COUNTER
             clr _ui16_a+0
-            sub a, _ui16_a+1
+            neg a
             jrpl 00023$
             mov _ui16_a+0, #0x01
         00023$:
@@ -439,18 +439,16 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             jra 00025$
         00024$:             // } else {
             // ui16_b = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
-            ld  _ui16_b+1, a
-            ld  a, #MIDDLE_SVM_TABLE
-            sub a, _ui16_b+1
+            sub a, #MIDDLE_SVM_TABLE
+            neg a
             ld  xl, a
             ld  a, _ui8_g_duty_cycle+0
             mul x, a
             // ui16_b = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_b >> 8)) << 1;
             ld  a, xh
-            ld  _ui16_b+1, a
-            ld  a, #MIDDLE_PWM_COUNTER
+            sub a, #MIDDLE_PWM_COUNTER
             clr _ui16_b+0
-            sub a, _ui16_b+1
+            neg a
             jrpl 00027$
             mov _ui16_b+0, #0x01
         00027$:
@@ -494,18 +492,16 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
             jra 00029$
         00028$:             // } else {
             // ui16_c = (uint16_t)((uint8_t)(MIDDLE_SVM_TABLE - ui8_temp) * (uint8_t)ui8_g_duty_cycle);
-            ld  _ui16_c+1, a
-            ld  a, #MIDDLE_SVM_TABLE
-            sub a, _ui16_c+1
+            sub a, #MIDDLE_SVM_TABLE
+            neg a
             ld  xl, a
             ld  a, _ui8_g_duty_cycle+0
             mul x, a
             // ui16_c = (uint8_t)(MIDDLE_PWM_COUNTER - (uint8_t) (ui16_c >> 8)) << 1;
             ld  a, xh
-            ld  _ui16_c+1, a
-            ld  a, #MIDDLE_PWM_COUNTER
+            sub a, #MIDDLE_PWM_COUNTER
             clr _ui16_c+0
-            sub a, _ui16_c+1
+            neg a
             jrpl 00031$
             mov _ui16_c+0, #0x01
         00031$:
@@ -845,7 +841,6 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER)
     TIM1->SR1 = (uint8_t) (~(uint8_t) TIM1_IT_CC4);
 }
 
-
 void hall_sensor_init(void) {
     // Init Hall sensor GPIO
     GPIO_Init(HALL_SENSOR_A__PORT, (GPIO_Pin_TypeDef) HALL_SENSOR_A__PIN, GPIO_MODE_IN_FL_IT);
@@ -873,8 +868,11 @@ void hall_sensor_init(void) {
 }
 
 // erps, FOC, battery voltage calcs
-void motor_controller(void) {
-
+void TIM4_IRQHandler(void) __interrupt(TIM4_OVF_IRQHANDLER) {
+    
+    // increment counter for controller loop
+    ui8_ebike_controller_counter++;
+    
     // calculate motor erps
     if (((uint8_t)(ui16_hall_counter_total>>8)) & 0x80) {
         ui16_motor_speed_erps = 0;
@@ -919,13 +917,15 @@ void motor_controller(void) {
     }
 
     static uint16_t ui16_foc_angle_accumulated;
-    #define READ_FOC_FILTER_COEFFICIENT   4
+    #define READ_FOC_FILTER_COEFFICIENT   3
 
     // low pass filter the FOC value, to avoid possible fast spikes/noise
     ui16_foc_angle_accumulated -= ui16_foc_angle_accumulated >> READ_FOC_FILTER_COEFFICIENT;
     ui16_foc_angle_accumulated += (uint16_t)ui8_new_foc_angle;
     ui8_g_foc_angle = (uint8_t)(ui16_foc_angle_accumulated >> READ_FOC_FILTER_COEFFICIENT);
     
+    // Reset interrupt flag
+    TIM4->SR1 = 0;
 }
 
 void motor_enable_pwm(void) {
