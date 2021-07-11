@@ -13,8 +13,9 @@
 #define __interrupt(x)
 #endif
 
-volatile uint8_t ui8_tim4_motor_counter = 0;
-volatile uint8_t ui8_tim4_ebike_counter = 0;
+// controller counters
+volatile uint8_t ui8_motor_controller_counter = 0;
+volatile uint8_t ui8_ebike_controller_counter = 0;
 
 void timer2_init(void);
 void timer3_init(void);
@@ -74,7 +75,7 @@ void timer4_init(void) {
     uint16_t ui16_i;
 
     TIM4_DeInit();
-    TIM4_TimeBaseInit(TIM4_PRESCALER_128, 0xFA); // Freq = 16MHz/128*250=500Hz (2ms)
+    TIM4_TimeBaseInit(TIM4_PRESCALER_128, 0x7D); // Freq = 16MHz/128*125=1000Hz (1ms)
     ITC_SetSoftwarePriority(TIM4_OVF_IRQHANDLER, ITC_PRIORITYLEVEL_1); // 1 = lowest priority
     TIM4_ITConfig(TIM4_IT_UPDATE, ENABLE); // Enable Update/Overflow Interrupt (see below TIM4_IRQHandler function)
     TIM4_Cmd(ENABLE); // TIM4 counter enable
@@ -85,5 +86,15 @@ void timer4_init(void) {
     }
 }
 
+void TIM4_IRQHandler(void) __interrupt(TIM4_OVF_IRQHANDLER) {
 
+    // increment counter for fast controller loop
+    ui8_motor_controller_counter++;    
 
+    // increment counter for controller loop
+    ui8_ebike_controller_counter++;
+
+    // Reset interrupt flag
+    TIM4->SR1 = 0;
+
+}

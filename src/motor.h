@@ -19,7 +19,7 @@
 extern volatile uint8_t ui8_controller_duty_cycle_ramp_up_inverse_step;
 extern volatile uint8_t ui8_controller_duty_cycle_ramp_down_inverse_step;
 extern volatile uint16_t ui16_adc_battery_voltage_filtered;
-extern volatile uint8_t ui8_adc_battery_voltage_cut_off;
+extern volatile uint16_t ui16_adc_voltage_cut_off;
 extern volatile uint8_t ui8_adc_battery_current_filtered;
 extern volatile uint8_t ui8_controller_adc_battery_current_target;
 extern volatile uint8_t ui8_g_duty_cycle;
@@ -33,8 +33,12 @@ extern volatile uint8_t ui8_hall_sensors_state;
 // motor erps
 extern volatile uint16_t ui16_motor_speed_erps;
 
-// brakes
+// sensors
 extern volatile uint8_t ui8_brake_state;
+extern volatile uint16_t ui16_adc_voltage;
+extern volatile uint16_t ui16_adc_torque;
+extern volatile uint16_t ui16_adc_torque_filtered;
+extern volatile uint16_t ui16_adc_throttle;
 
 // cadence sensor
 extern volatile uint16_t ui16_cadence_sensor_ticks;
@@ -44,9 +48,7 @@ extern volatile uint32_t ui32_crank_revolutions_x20;
 extern volatile uint16_t ui16_wheel_speed_sensor_ticks;
 extern volatile uint32_t ui32_wheel_speed_sensor_ticks_total;
 
-// main loop TIM4 variable counters
-extern volatile uint8_t ui8_ebike_controller_counter;
-
+void motor_controller(void);
 void hall_sensor_init(void); // must be called before using the motor
 void motor_enable_pwm(void);
 void motor_disable_pwm(void);

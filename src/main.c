@@ -1,7 +1,7 @@
 /*
  * TongSheng TSDZ2 motor controller firmware/
  *
- * Copyright (C) Casainho, Leon, MSpider65 2020.
+ * Copyright (C) Casainho, Leon, MSpider65 2021.
  *
  * Released under the GPL License, Version 3
  */
@@ -92,13 +92,23 @@ int main(void) {
     enableInterrupts();
 
     while (1) {
-        // ebike controller - run every 50ms (TIM4 counter @ 2ms)
+
+        // motor controller - run every 3ms (TIM4 counter @ 1ms)
+        if (ui8_motor_controller_counter > 3) {
+            // reset counter
+            ui8_motor_controller_counter = 0;
+            // run controller function
+            motor_controller();
+        }
+
+        // ebike controller - run every 25ms (TIM4 counter @ 1ms)
         if (ui8_ebike_controller_counter > 25) {
             // reset counter
             ui8_ebike_controller_counter = 0;
             // run controller function
             ebike_app_controller();
         }
+
     }
 }
 
