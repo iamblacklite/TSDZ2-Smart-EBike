@@ -18,6 +18,8 @@
 #define HYBRID_ASSIST_MODE                        5
 #define CRUISE_MODE                               6
 #define WALK_ASSIST_MODE                          7
+#define PWM_CALIBRATION_ASSIST_MODE               8
+#define ERPS_CALIBRATION_ASSIST_MODE              9
 
 // error codes
 // #define NO_ERROR                                  0

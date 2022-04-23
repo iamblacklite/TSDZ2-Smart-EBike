@@ -13,7 +13,7 @@
 //#define PWM_TIME_DEBUG
 //#define MAIN_TIME_DEBUG
 
-#define FW_VERSION 201CV14
+#define FW_VERSION 201CV15
 
 /*---------------------------------------------------------
  NOTE: regarding motor rotor offset
@@ -37,8 +37,8 @@
 // ----------------------------------------------------------------------------------------------------------------
 // PWM related values
 // motor
-#define PWM_COUNTER_MAX                                         420     // 16MHz / 840 = 19,048 KHz
-#define PWM_CYCLES_SECOND                                       (16000000/(PWM_COUNTER_MAX*2)) // 52.5us (PWM period)
+#define PWM_COUNTER_MAX                                         444     // 16MHz / 888 = 18,018 KHz
+#define PWM_CYCLES_SECOND                                       (16000000/(PWM_COUNTER_MAX*2)) // 55.5us (PWM period)
 
 /*---------------------------------------------------------
  NOTE: regarding duty cycle (PWM) ramping
@@ -65,8 +65,8 @@
 #define MOTOR_OVER_SPEED_ERPS                                   ((PWM_CYCLES_SECOND/29) < 650 ?  (PWM_CYCLES_SECOND/29) : 650) // motor max speed | 29 points for the sinewave at max speed (less than PWM_CYCLES_SECOND/29)
 
 // cadence
-#define CADENCE_SENSOR_CALC_COUNTER_MIN                         (uint16_t)((uint32_t)PWM_CYCLES_SECOND*100U/470U)  // 3500 at 15.625KHz - adjust for integer overflows
-#define CADENCE_SENSOR_TICKS_COUNTER_MIN_AT_SPEED               (uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/750U)   // 280 at 15.625KHz - adjusted for integer overflows
+#define CADENCE_SENSOR_CALC_COUNTER_MIN                         (uint16_t)((uint32_t)PWM_CYCLES_SECOND*100U/446U)  // 3500 at 15.625KHz - adjust for integer overflows
+#define CADENCE_SENSOR_TICKS_COUNTER_MIN_AT_SPEED               (uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/558U)   // 280 at 15.625KHz - adjusted for integer overflows
 #define CADENCE_TICKS_STARTUP                                   (uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/25U)  // ui16_cadence_sensor_ticks value for startup. About 7-8 RPM (6250 at 15.625KHz)
 #define CADENCE_SENSOR_STANDARD_MODE_SCHMITT_TRIGGER_THRESHOLD  (uint16_t)((uint32_t)PWM_CYCLES_SECOND*10U/446U)   // software based Schmitt trigger to stop motor jitter when at resolution limits (350 at 15.625KHz)
 
@@ -112,15 +112,16 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
 #define HALL_COUNTER_OFFSET_UP                  (HALL_COUNTER_OFFSET_DOWN + 21)
 #define FW_HALL_COUNTER_OFFSET_MAX              6 // 6*4=24us max time offset
 
-#define MOTOR_ROTOR_INTERPOLATION_MIN_ERPS      20
+
+#define MOTOR_ROTOR_INTERPOLATION_MIN_ERPS      15
 
 // Torque sensor values
 #define ADC_TORQUE_SENSOR_CALIBRATION_OFFSET    (uint8_t)6
 #define ADC_TORQUE_SENSOR_OFFSET_DEFAULT		(uint8_t)150
 // adc torque offset gap value for error
-#define ADC_TORQUE_SENSOR_OFFSET_THRESHOLD		(uint8_t)35
+#define ADC_TORQUE_SENSOR_OFFSET_THRESHOLD		(uint8_t)20
 // adc torque delta range value for remapping
-#define ADC_TORQUE_SENSOR_RANGE_MIN	  			(uint8_t)150
+#define ADC_TORQUE_SENSOR_RANGE_MIN	  			(uint8_t)140
 // scale the torque assist target current
 #define TORQUE_ASSIST_FACTOR_DENOMINATOR		(uint8_t)110
 
@@ -133,6 +134,7 @@ HALL_COUNTER_OFFSET_UP:    29 -> 44
  but a value of 25 may be good.
  ---------------------------------------------------------*/
 
+#define ADC_10_BIT_BATTERY_OVERCURRENT                            144     // 23 amps
 #define ADC_10_BIT_BATTERY_CURRENT_MAX                            106     // 17 amps
 #define ADC_10_BIT_MOTOR_PHASE_CURRENT_MAX                        177     // 28 amps
 
@@ -217,9 +219,8 @@ MAX_POWER_CALC_CONST = 2500000 / (BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X1000 * BA
 to avoid overflow max value of MAX_POWER_CALC_CONST is 255, so divide constant by 8 and divide voltage by 8 in calculation */
 #define MAX_POWER_CALC_CONST_DIV8                                 224U
 
-// new FOC constants - speed up calculations
-#define MAGIC_FOC_36V                                             (uint16_t)7345U    // (80 * BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X512 * 101 / BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X512) >> 1
-#define MAGIC_FOC_48V                                             (uint16_t)13000U   // (142 * BATTERY_CURRENT_PER_10_BIT_ADC_STEP_X512 * 101 / BATTERY_VOLTAGE_PER_10_BIT_ADC_STEP_X512) >> 1
-#define DUTY_CYCLE_FOC_ADJUST									  (uint8_t)15U   	 // even if duty cycle is 100% there is some PWM with dead time etc.. scale from 0 - 255 eg. 25 = 10%
+// new FOC constants
+#define FOC_MULTIPLICATOR_36V							  		27U;
+#define FOC_MULTIPLICATOR_48V									35U;
 
 #endif // _MAIN_H_

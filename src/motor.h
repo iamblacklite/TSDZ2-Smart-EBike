@@ -18,7 +18,6 @@
 // power variables
 extern volatile uint8_t ui8_controller_duty_cycle_ramp_up_inverse_step;
 extern volatile uint8_t ui8_controller_duty_cycle_ramp_down_inverse_step;
-extern volatile uint16_t ui16_adc_battery_voltage_filtered;
 extern volatile uint16_t ui16_adc_voltage_cut_off;
 extern volatile uint8_t ui8_adc_battery_current_filtered;
 extern volatile uint8_t ui8_controller_adc_battery_current_target;
@@ -29,6 +28,10 @@ extern volatile uint8_t ui8_controller_duty_cycle_target;
 extern volatile uint8_t ui8_g_foc_angle;
 extern volatile uint8_t ui8_g_field_weakening_enable;
 extern volatile uint8_t ui8_hall_sensors_state;
+extern volatile uint8_t ui8_adc_motor_phase_current;
+extern volatile uint16_t ui16_hall_calib_cnt[6];
+extern volatile uint8_t ui8_hall_ref_angles[6];
+extern volatile uint8_t ui8_hall_counter_offsets[6];
 
 // motor erps
 extern volatile uint16_t ui16_motor_speed_erps;
@@ -37,7 +40,6 @@ extern volatile uint16_t ui16_motor_speed_erps;
 extern volatile uint8_t ui8_brake_state;
 extern volatile uint16_t ui16_adc_voltage;
 extern volatile uint16_t ui16_adc_torque;
-extern volatile uint16_t ui16_adc_torque_filtered;
 extern volatile uint16_t ui16_adc_throttle;
 
 // cadence sensor
@@ -48,7 +50,8 @@ extern volatile uint32_t ui32_crank_revolutions_x20;
 extern volatile uint16_t ui16_wheel_speed_sensor_ticks;
 extern volatile uint32_t ui32_wheel_speed_sensor_ticks_total;
 
-void motor_controller(void);
+extern volatile uint8_t ui8_pas_new_transition;
+
 void hall_sensor_init(void); // must be called before using the motor
 void motor_enable_pwm(void);
 void motor_disable_pwm(void);

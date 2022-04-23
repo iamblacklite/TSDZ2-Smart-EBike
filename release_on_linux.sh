@@ -16,7 +16,7 @@ if [ ! -d "$RELEASE_FOLDER" ]; then
 	cd src
 	make clean
         make -f Makefile
-	cp main.ihx $RELEASE_FOLDER/TSDZ2-v$VERSION.hex
+	cp main.hex $RELEASE_FOLDER/TSDZ2-v$VERSION.hex
 	cd ../..
 
 	echo Done! Find the files on: $RELEASE_FOLDER

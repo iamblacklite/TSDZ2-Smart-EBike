@@ -10,7 +10,6 @@
 #define _TIMERS_H_
 
 // controller counters
-extern volatile uint8_t ui8_motor_controller_counter;
 extern volatile uint8_t ui8_ebike_controller_counter;
 
 void timers_init(void);

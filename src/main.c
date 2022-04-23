@@ -56,7 +56,7 @@ void TIM1_CAP_COM_IRQHandler(void) __interrupt(TIM1_CAP_COM_IRQHANDLER);
 void UART2_RX_IRQHandler(void) __interrupt(UART2_RX_IRQHANDLER);
 // UART TX interrupt
 void UART2_TX_IRQHandler(void) __interrupt(UART2_TX_IRQHANDLER);
-// TIM4 Overflow interrupt (called every 1ms)
+// TIM4 Overflow interrupt (called every 2ms)
 void TIM4_IRQHandler(void) __interrupt(TIM4_OVF_IRQHANDLER);
 // Hall Sensor Signal interrupt
 void HALL_SENSOR_A_PORT_IRQHandler(void) __interrupt(EXTI_HALL_A_IRQ);
@@ -93,16 +93,12 @@ int main(void) {
 
     while (1) {
 
-        // motor controller - run every 3ms (TIM4 counter @ 1ms)
-        if (ui8_motor_controller_counter > 3) {
-            // reset counter
-            ui8_motor_controller_counter = 0;
-            // run controller function
-            motor_controller();
+        if (ui8_pas_new_transition) {
+            new_torque_sample();
         }
 
-        // ebike controller - run every 25ms (TIM4 counter @ 1ms)
-        if (ui8_ebike_controller_counter > 25) {
+        // ebike controller - run every 30ms (TIM4 counter @ 2ms)
+        if (ui8_ebike_controller_counter >= 15) {
             // reset counter
             ui8_ebike_controller_counter = 0;
             // run controller function
